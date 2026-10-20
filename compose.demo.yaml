@@ -1,0 +1,109 @@
+name: gerador-de-provas-demo
+
+services:
+  web:
+    profiles: [frontend]
+    build:
+      context: ./frontend
+      args:
+        VITE_API_MODE: demo
+        VITE_API_BASE_URL: /api
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:80"
+    environment:
+      API_UPSTREAM: http://api:8080
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  api:
+    profiles: [swagger, frontend]
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:${DEMO_API_PORT:-8081}:8080"
+    environment:
+      APP_ENV: demo
+      APP_DEBUG: "false"
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: gerador_de_provas_demo
+      DB_USERNAME: gerador_demo
+      DB_PASSWORD: demo-only-password
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - >-
+        composer db:migrate && composer db:seed && php examples/prepare-demo.php &&
+        exec frankenphp run --config /etc/frankenphp/Caddyfile --adapter caddyfile
+    healthcheck:
+      test:
+        - CMD
+        - php
+        - -r
+        - "exit(@file_get_contents('http://127.0.0.1:8080/health/database') === '{\"status\":\"ok\"}' ? 0 : 1);"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  demo:
+    build:
+      context: .
+    environment:
+      APP_ENV: demo
+      APP_DEBUG: "false"
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: gerador_de_provas_demo
+      DB_USERNAME: gerador_demo
+      DB_PASSWORD: demo-only-password
+      DEMO_ALTERNATIVES_COUNT: "${DEMO_ALTERNATIVES_COUNT:-5}"
+      DEMO_TRUE_FALSE_STATEMENTS: "${DEMO_TRUE_FALSE_STATEMENTS:-3}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./storage/demo:/app/storage/demo
+    command:
+      - sh
+      - -c
+      - >-
+        composer db:migrate && composer db:seed &&
+        php examples/generate-exam.php "$${DEMO_ALTERNATIVES_COUNT}" "$${DEMO_TRUE_FALSE_STATEMENTS}"
+
+  mysql:
+    image: mysql:8.4.11@sha256:0744ee5ef89ce6ccfa13de3e579fe6b9e27f93dd70da9c06d2c908b1b193fb8d
+    environment:
+      MYSQL_DATABASE: gerador_de_provas_demo
+      MYSQL_USER: gerador_demo
+      # Credenciais descartáveis; este MySQL não publica portas nem monta o banco local.
+      MYSQL_PASSWORD: demo-only-password
+      MYSQL_ROOT_PASSWORD: demo-only-root-password
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$${MYSQL_PASSWORD}"
+          mysql --protocol=TCP --host=127.0.0.1 --connect-timeout=3
+          --user="$${MYSQL_USER}" --database="$${MYSQL_DATABASE}"
+          --execute="SELECT 1" --silent --skip-column-names > /dev/null 2>&1
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

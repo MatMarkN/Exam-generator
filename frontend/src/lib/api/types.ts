@@ -1,0 +1,21 @@
+import type { components } from "./schema"
+
+export type Teacher = components["schemas"]["Teacher"]
+export type TeacherSettings = components["schemas"]["TeacherSettings"]
+export type TeacherCreate = components["schemas"]["TeacherCreate"]
+export type TeacherUpdate = components["schemas"]["TeacherUpdate"]
+export type TeacherSettingsUpdate = components["schemas"]["TeacherSettingsUpdate"]
+export type Subject = components["schemas"]["Subject"]
+export type SchoolGrade = components["schemas"]["SchoolGrade"]
+export type Exam = components["schemas"]["SavedExam"]
+export type Question = Exam["questions"][number]
+export type AnswerKey = components["schemas"]["AnswerKey"]
+export type Answer = AnswerKey[number]
+export type ExamRequest = components["schemas"]["ExamRequest"]
+export type GenerationResult = components["schemas"]["GenerationResult"]
+export type GenerationSummary = components["schemas"]["GenerationSummary"]
+export type GenerationDetail = components["schemas"]["GenerationDetail"]
+export type GenerationStatus = GenerationSummary["status"]
+export type ExamLookup = components["schemas"]["ExamLookup"]
+export type AnswerKeyLookup = components["schemas"]["AnswerKeyLookup"]
+export interface Page<T> { items: T[]; next_before_id: number | null }

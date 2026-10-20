@@ -1,0 +1,307 @@
+{
+  "exam": {
+    "id": 1,
+    "title": "DEMONSTRAÇÃO SINTÉTICA — Frações — 6º ano",
+    "instructions": "Material de teste com currículo sintético. Leia as questões. Marque uma alternativa na questão 1, justifique a questão 2 e classifique cada afirmação da questão 3 como verdadeira ou falsa.",
+    "questions": [
+      {
+        "bncc_skills": [
+          "EF06MA07"
+        ],
+        "image_description": null,
+        "number": 1,
+        "type": "multiple_choice",
+        "statement": "Uma pizza foi dividida em 8 fatias iguais. Quatro fatias foram consumidas. Qual fração é equivalente à parte consumida?",
+        "alternatives": [
+          {
+            "key": "A",
+            "text": "1/2"
+          },
+          {
+            "key": "B",
+            "text": "1/4"
+          },
+          {
+            "key": "C",
+            "text": "3/4"
+          },
+          {
+            "key": "D",
+            "text": "1/8"
+          },
+          {
+            "key": "E",
+            "text": "3/8"
+          }
+        ]
+      },
+      {
+        "bncc_skills": [
+          "EF06MA07"
+        ],
+        "image_description": null,
+        "number": 2,
+        "type": "open_ended",
+        "statement": "Qual fração é maior: 3/4 ou 2/3? Justifique usando frações equivalentes com o mesmo denominador."
+      },
+      {
+        "bncc_skills": [
+          "EF06MA07"
+        ],
+        "image_description": null,
+        "number": 3,
+        "type": "true_false",
+        "statement": "Classifique cada afirmação como verdadeira ou falsa.",
+        "statements": [
+          {
+            "number": 1,
+            "text": "1/2 e 2/4 representam a mesma quantidade de um mesmo inteiro."
+          },
+          {
+            "number": 2,
+            "text": "3/8 é maior que 1/2."
+          },
+          {
+            "number": 3,
+            "text": "Entre frações de mesmo denominador positivo, a de maior numerador é maior."
+          }
+        ]
+      }
+    ],
+    "subject": {
+      "id": 5,
+      "code": "matematica",
+      "name": "Matemática"
+    },
+    "grade": {
+      "id": 6,
+      "year_number": 6,
+      "name": "6º ano",
+      "education_stage": "ensino_fundamental"
+    },
+    "topics": [
+      "frações"
+    ]
+  },
+  "answer_key": [
+    {
+      "question_number": 1,
+      "type": "multiple_choice",
+      "correct_alternative": "A"
+    },
+    {
+      "question_number": 2,
+      "type": "open_ended",
+      "expected_answer": "3/4 é maior. Como 3/4 = 9/12 e 2/3 = 8/12, comparamos 9/12 e 8/12 e concluímos que 3/4 > 2/3.",
+      "grading_criteria": [
+        "Obtém frações equivalentes com o mesmo denominador, como 9/12 e 8/12.",
+        "Compara os numeradores e conclui que 3/4 é maior que 2/3, justificando a resposta."
+      ]
+    },
+    {
+      "question_number": 3,
+      "type": "true_false",
+      "answers": [
+        {
+          "statement_number": 1,
+          "correct": true
+        },
+        {
+          "statement_number": 2,
+          "correct": false
+        },
+        {
+          "statement_number": 3,
+          "correct": true
+        }
+      ]
+    }
+  ],
+  "bncc_context": {
+    "schema_version": "bncc-context-v1",
+    "document": {
+      "id": 1,
+      "title": "Currículo SINTÉTICO da demonstração — não é a BNCC oficial",
+      "version_label": "demo-sintetica-v1",
+      "revision": 1,
+      "sha256": "a33821380d3db8c5416f19ceaf4ec3b461d496c6b57de9b5cb7c9b0f8d249b55",
+      "page_count": 1,
+      "status": "ready",
+      "ready_at": "2026-09-30 13:43:00",
+      "structured_at": "2026-09-30 13:43:00",
+      "structure_profile": "synthetic-exam-demo-v1"
+    },
+    "subject": {
+      "id": 5,
+      "code": "matematica",
+      "name": "Matemática"
+    },
+    "grade": {
+      "id": 6,
+      "year_number": 6,
+      "name": "6º ano",
+      "education_stage": "ensino_fundamental"
+    },
+    "area": {
+      "id": 1,
+      "code": "matematica",
+      "name": "Matemática — área SINTÉTICA de demonstração"
+    },
+    "skills": [
+      {
+        "id": 1,
+        "code": "EF06MA07",
+        "description": "Conteúdo SINTÉTICO de demonstração; não é texto oficial da BNCC. Comparar frações positivas, reconhecer equivalências e justificar comparações.",
+        "grades": [
+          6
+        ],
+        "sources": [
+          {
+            "id": 1,
+            "section_id": 1,
+            "page_start": 1,
+            "page_end": 1,
+            "printed_page_label": "virtual-demo",
+            "source_excerpt": "(EF06MA07) Conteúdo SINTÉTICO de demonstração; não é texto oficial da BNCC. Comparar frações positivas, reconhecer equivalências e justificar comparações.",
+            "thematic_unit": "Unidade SINTÉTICA de demonstração",
+            "knowledge_objects": "Frações — objeto SINTÉTICO",
+            "description_page": null,
+            "language_practice": null,
+            "field_of_activity": null
+          }
+        ],
+        "matches": [
+          {
+            "topic": "frações",
+            "fields": [
+              "description",
+              "knowledge_objects"
+            ]
+          }
+        ]
+      }
+    ],
+    "competencies": [
+      {
+        "id": 1,
+        "scope": "component",
+        "area_id": null,
+        "component_id": 1,
+        "number": 1,
+        "description": "Conteúdo SINTÉTICO de demonstração; não é texto oficial da BNCC. Explicar raciocínios matemáticos com clareza.",
+        "source_section_id": 1,
+        "page_start": 1,
+        "page_end": 1,
+        "source_excerpt": "Conteúdo SINTÉTICO de demonstração; não é texto oficial da BNCC. Competência de demonstração: comunicar a justificativa."
+      }
+    ],
+    "topics": [
+      "frações"
+    ],
+    "selection": {
+      "method": "lexical-v1",
+      "limit": 12,
+      "total_matches": 1,
+      "returned_skills": 1,
+      "truncated": false,
+      "all_topics_covered": true
+    }
+  },
+  "generation": {
+    "schema_name": "exam_generation_v1",
+    "prompt_version": "exam-prompt-v2",
+    "provider": "fake",
+    "model": "static-fixture-v1",
+    "duration_ms": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "provider_request_id": null,
+    "request": {
+      "subject": "matematica",
+      "grade": 6,
+      "topics": [
+        "frações"
+      ],
+      "question_count": 3,
+      "question_mode": "manual",
+      "question_distribution": {
+        "multiple_choice": 1,
+        "open_ended": 1,
+        "true_false": 1
+      },
+      "alternatives_count": 5,
+      "true_false_statements": 3,
+      "image_mode": "none",
+      "teacher_notes": "Use linguagem clara, uma situação de partilha e uma comparação com justificativa.",
+      "reference_text": "Frações equivalentes representam a mesma parte de um inteiro."
+    },
+    "bncc_validation": {
+      "status": "passed",
+      "database_rechecked": true,
+      "version": "exam-bncc-validation-v1",
+      "document_id": 1,
+      "document_revision": 1,
+      "document_sha256": "a33821380d3db8c5416f19ceaf4ec3b461d496c6b57de9b5cb7c9b0f8d249b55",
+      "context_sha256": "5045f6b5248ffabf3c3e847d614b14317317831ccab3613299cf66d3a2dcb592",
+      "questions": [
+        {
+          "question_number": 1,
+          "skill_ids": [
+            1
+          ]
+        },
+        {
+          "question_number": 2,
+          "skill_ids": [
+            1
+          ]
+        },
+        {
+          "question_number": 3,
+          "skill_ids": [
+            1
+          ]
+        }
+      ],
+      "skills": [
+        {
+          "id": 1,
+          "code": "EF06MA07",
+          "question_numbers": [
+            1,
+            2,
+            3
+          ],
+          "source_ids": [
+            1
+          ]
+        }
+      ],
+      "topic_references": [
+        {
+          "topic": "frações",
+          "skill_codes": [
+            "EF06MA07"
+          ],
+          "question_numbers": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "unused_context_skill_codes": [],
+      "semantic_review": "not_performed",
+      "teacher_review_required": true
+    },
+    "estimated_cost": {
+      "amount": "0.00000000",
+      "currency": "USD",
+      "basis": "simulated"
+    },
+    "id": 1,
+    "exam_id": 1,
+    "total_duration_ms": 65,
+    "status": "succeeded"
+  }
+}

@@ -1,0 +1,32 @@
+# Configuração privada, em qualquer pasta.
+.env
+.env.*
+!.env.example
+
+# Dependências e arquivos gerados.
+vendor/
+node_modules/
+/frontend/dist/
+/frontend/coverage/
+/frontend/test-results/
+/frontend/playwright-report/
+*.log
+*.tsbuildinfo
+/.phpunit.cache/
+/storage/
+/tmp/
+
+# Configuração local de editores e do sistema.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Guias de desenvolvimento ficam locais; o README público é mantido.
+*.md
+!/README.md
+
+# Atribuições e proveniência acompanham os componentes distribuídos.
+!/frontend/THIRD_PARTY_NOTICES.md
+!/public/swagger-ui/UPSTREAM.md
+!/tests/Fixtures/openapi/README.md

@@ -1,0 +1,12 @@
+# Complemento EXCLUSIVO de compose.demo.yaml. Ativa uma chamada real no banco descartável.
+services:
+  demo:
+    environment:
+      GEMINI_API_KEY: "${GEMINI_API_KEY:?Configure GEMINI_API_KEY no .env antes de executar a demonstração real}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
+    command:
+      - sh
+      - -c
+      - >-
+        composer db:migrate && composer db:seed &&
+        php examples/generate-exam-gemini.php --send "$${DEMO_ALTERNATIVES_COUNT}" "$${DEMO_TRUE_FALSE_STATEMENTS}"

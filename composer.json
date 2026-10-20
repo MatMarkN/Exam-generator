@@ -1,0 +1,43 @@
+{
+    "name": "gerador-de-provas/backend",
+    "description": "API para geração de provas escolares orientadas pela BNCC.",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.4",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "catfan/medoo": "^2.6",
+        "opis/json-schema": "^2.6",
+        "slim/psr7": "^1.8",
+        "slim/slim": "^4.15.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12.5",
+        "robmorgan/phinx": "^0.16"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "db:migrate": "phinx migrate --configuration=phinx.php",
+        "db:status": "phinx status --configuration=phinx.php",
+        "db:seed": "phinx seed:run --configuration=phinx.php --seed=InitialSchoolCatalogs",
+        "test": "phpunit"
+    },
+    "config": {
+        "platform": {
+            "php": "8.4.0"
+        },
+        "sort-packages": true
+    }
+}

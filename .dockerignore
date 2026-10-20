@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+vendor
+.idea
+.vscode
+*.log
+README.md
+storage
+tmp
+frontend
+*.pdf

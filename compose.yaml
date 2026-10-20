@@ -1,0 +1,71 @@
+name: gerador-de-provas
+
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    environment:
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      APP_ENV: local
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: "${DB_DATABASE:-gerador_de_provas}"
+      DB_USERNAME: "${DB_USERNAME:-gerador}"
+      DB_PASSWORD: "${DB_PASSWORD:?Defina DB_PASSWORD no arquivo .env}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./public:/app/public:ro
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+      - ./Caddyfile:/etc/frankenphp/Caddyfile:ro
+      - ./database:/app/database
+      - ./tests:/app/tests:ro
+      - ./phinx.php:/app/phinx.php:ro
+      - ./phpunit.xml:/app/phpunit.xml:ro
+      - bncc_files:/app/storage/bncc
+    healthcheck:
+      test:
+        - CMD
+        - php
+        - -r
+        - "exit(@file_get_contents('http://127.0.0.1:8080/health') === '{\"status\":\"ok\"}' ? 0 : 1);"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  mysql:
+    image: mysql:8.4.11@sha256:0744ee5ef89ce6ccfa13de3e579fe6b9e27f93dd70da9c06d2c908b1b193fb8d
+    environment:
+      MYSQL_DATABASE: "${DB_DATABASE:-gerador_de_provas}"
+      MYSQL_USER: "${DB_USERNAME:-gerador}"
+      MYSQL_PASSWORD: "${DB_PASSWORD:?Defina DB_PASSWORD no arquivo .env}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD no arquivo .env}"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$${MYSQL_PASSWORD}"
+          mysql --protocol=TCP --host=127.0.0.1 --connect-timeout=3
+          --user="$${MYSQL_USER}" --database="$${MYSQL_DATABASE}"
+          --execute="SELECT 1" --silent --skip-column-names > /dev/null 2>&1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  mysql_data:
+  bncc_files:
