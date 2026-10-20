@@ -12,6 +12,7 @@ use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tests\Support\BnccFixtures;
+use Tests\Support\AuthFixture;
 use Tests\Support\CurriculumFixture;
 use Tests\Support\ExamFixture;
 use Tests\Support\GenerationHistoryFixture;
@@ -27,11 +28,13 @@ final class ExamPresentationTest extends TestCase
     private int $documentId;
     private int $teacherId;
     private \stdClass $lastResponse;
+    private array $session;
 
     protected function setUp(): void
     {
         $connections = new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php');
         $this->database = $connections->create();
+        $this->session = (new AuthFixture($this->database))->create();
         $fixtures = new BnccFixtures($this->database);
         $this->documentId = $fixtures->document(['status' => 'ready', 'ready_at' => '2026-01-01 00:00:00',
             'structured_at' => '2026-01-01 00:00:00', 'structure_profile' => 'synthetic-presentation-test']);
@@ -45,7 +48,8 @@ final class ExamPresentationTest extends TestCase
             'school_grade_id' => $this->database->get('school_grades', 'id', ['year_number' => 6])]);
         $fixtures->context($curriculum, $skill);
         $fixtures->competency($curriculum, overrides: ['review_status' => 'approved', 'reviewed_at' => '2026-01-01 00:00:00']);
-        $this->database->insert('teachers', ['name' => 'PROFESSORA_PRIVADA', 'email' => 'apresentacao@example.test']);
+        $this->database->insert('teachers', ['name' => 'PROFESSORA_PRIVADA', 'email' => 'apresentacao@example.test',
+            'user_id' => $this->session['user']->id]);
         $this->teacherId = (int) $this->database->id();
         $this->database->insert('teacher_settings', ['teacher_id' => $this->teacherId,
             'school_name' => 'ESCOLA_PRIVADA', 'default_font_family' => 'Calibri', 'default_font_size' => 14]);
@@ -60,6 +64,7 @@ final class ExamPresentationTest extends TestCase
         (new GenerationHistoryFixture($this->database))->removeForDocument($this->documentId);
         (new CurriculumFixture($this->database))->remove($this->documentId);
         $this->database->delete('teachers', ['id' => $this->teacherId]);
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testTeacherDefaultsAreCopiedIntoExamWithoutBeingSentToTheAiAndStayAfterProfileEdits(): void
@@ -204,13 +209,17 @@ final class ExamPresentationTest extends TestCase
 
     private function request(string $method, string $url, ?array $input = null, int $status = 200): array
     {
+        if ($method === 'POST' && $url === '/exams/generate') {
+            // A apresentação usa várias gerações no mesmo caso; cotas/intervalos possuem testes próprios.
+            $this->database->update('generation_quota_users', ['last_admitted_at' => null], ['user_id' => $this->session['user']->id]);
+        }
         $request = (new ServerRequestFactory())->createServerRequest($method, $url);
         if ($input !== null) {
             $request = $request->withHeader('Content-Type', 'application/json');
             $request->getBody()->write(json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
             $request->getBody()->rewind();
         }
-        $response = $this->app->handle($request);
+        $response = $this->app->handle((new AuthFixture($this->database))->authorize($request, $this->session));
         self::assertSame($status, $response->getStatusCode(), (string) $response->getBody());
         $this->lastResponse = json_decode((string) $response->getBody(), flags: JSON_THROW_ON_ERROR);
         return json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);

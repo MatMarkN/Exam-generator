@@ -28,11 +28,11 @@ O cenário demo usa currículo sintético e questões fixas de **frações para 
 
 Para conhecer o fluxo:
 
-1. Em **Professores**, cadastre um nome e salve escola e preferências de fonte.
-2. Em **Criar prova**, avance pelas etapas de conteúdo, questões e cabeçalho.
-3. Selecione o professor e clique em **Gerar prova**.
-4. Leia a avaliação e abra **Ver gabarito** para consultar as respostas.
-5. Acesse **Minhas provas** para consultar o histórico e filtrar tentativas.
+1. Crie uma conta na tela **Cadastre-se** e entre na aplicação. A demonstração também exige uma sessão válida.
+2. Em **Professores**, cadastre um nome e salve escola e preferências de fonte.
+3. Em **Criar prova**, avance pelas etapas de conteúdo, questões e cabeçalho.
+4. Selecione o professor e clique em **Gerar prova**.
+5. Leia a avaliação, consulte **Ver gabarito** e acesse **Minhas provas** para o histórico.
 
 Para encerrar:
 
@@ -44,6 +44,8 @@ O banco demo é temporário: seus cadastros e provas são descartados quando o M
 
 ## Funcionalidades
 
+- Cadastro, login e logout validados pela API, com sessões HttpOnly e proteção CSRF.
+- Cadastros, provas e gabaritos separados por usuário, com manutenção curricular restrita a administradores.
 - Criação de provas em três etapas, com resumo das configurações.
 - Distribuição automática ou manual entre três tipos de questão.
 - Quantidades configuráveis de alternativas e afirmações de verdadeiro ou falso.
@@ -55,7 +57,8 @@ O banco demo é temporário: seus cadastros e provas são descartados quando o M
 - Tela de revisão da BNCC e liberação por matéria e ano escolar, com proteção dos itens já publicados.
 - Contexto curricular selecionado por matéria, ano e tópicos.
 - Validação estrutural da resposta e conferência das referências curriculares.
-- Swagger UI local com as **31 operações da API** documentadas.
+- Cotas e limites de concorrência de gerações e processamento de somente um PDF por vez.
+- Swagger UI local com as **35 operações da API** documentadas, incluindo autenticação.
 
 ## Tecnologias
 
@@ -93,6 +96,8 @@ O frontend concentra navegação, formulários e apresentação. A API centraliz
 - **Apresentação determinística:** cabeçalho e fonte são preenchidos pelo backend; esses campos não precisam ser enviados à IA.
 - **Contratos compartilhados:** os tipos da API no frontend são gerados a partir do OpenAPI.
 - **Geração explícita:** o frontend não repete automaticamente o POST de geração, evitando duplicação em uma nova tentativa de rede.
+- **Identidade verificada no servidor:** sessão opaca com hash no banco, cookie HttpOnly, validação de CSRF/origem/Host e consultas filtradas pelo proprietário.
+- **Contenção de recursos:** cotas de IA coordenadas pelo MySQL, lock global para PDFs e limites de memória/CPU do extrator e do container.
 - **Execução reproduzível:** dependências registradas nos lockfiles e ambientes separados para desenvolvimento, demonstração e testes.
 
 ## Organização do repositório
@@ -118,7 +123,7 @@ docs/screenshots/        imagens da interface
 
 ## Testes e build
 
-Na última verificação registrada, passaram **579 testes do backend** e **37 testes do frontend**. O fluxo de cadastro, preferências, geração, leitura, gabarito e histórico foi conferido no navegador usando o ambiente demo. A revisão curricular, a liberação por matéria/ano e a indicação de disponibilidade também foram conferidas na interface conectada ao ambiente principal.
+Na última verificação registrada, passaram **623 testes do backend (2.580 verificações)** e **51 testes do frontend**, e o build TypeScript/Vite concluiu. Os testes cobrem autenticação, isolamento entre contas, CSRF, permissões administrativas, cotas e concorrência. Cadastro e revogação da sessão foram conferidos por HTTP; login, recarga da página, consulta curricular como professor e logout foram conferidos no navegador. O fluxo anterior de geração com o provedor simulado continua coberto.
 
 ### Backend
 
@@ -198,9 +203,25 @@ docker compose -f compose.demo.yaml --profile frontend stop web
 docker compose -f compose.yaml -f compose.frontend.yaml up --build -d --wait --wait-timeout 120 web
 ```
 
-Acesse **BNCC** no menu para selecionar o documento, a matéria e o ano. Confira as habilidades e competências com as páginas de origem, registre as decisões e utilize **Liberar matéria e ano** quando todos os itens dessa combinação estiverem aprovados. Outros conteúdos podem continuar pendentes. As competências compartilhadas e as habilidades utilizadas por uma liberação ficam protegidas contra edição; correções posteriores exigem uma nova revisão do documento.
+Cadastre sua conta pela interface. O cadastro público cria um professor; a promoção a administrador é explícita, pelo terminal da instalação:
+
+```bash
+docker compose exec app php bin/promote-admin.php seu-email@example.com
+```
+
+Com uma conta administrativa, acesse **BNCC** no menu para selecionar o documento, a matéria e o ano. Confira as habilidades e competências com as páginas de origem, registre as decisões e utilize **Liberar matéria e ano** quando todos os itens dessa combinação estiverem aprovados. Outros conteúdos podem continuar pendentes. As competências compartilhadas e as habilidades utilizadas por uma liberação ficam protegidas contra edição; correções posteriores exigem uma nova revisão do documento.
+
+Contas comuns podem consultar o currículo e gerar suas provas. Somente administradores podem importar o PDF de regras, revisar e liberar conteúdo. Dados privados antigos ficam preservados sem proprietário e invisíveis até atribuição explícita pelo comando `bin/claim-legacy-data.php --email=...`; o primeiro cadastro não os recebe automaticamente.
 
 A geração real exige a combinação curricular liberada e `GEMINI_API_KEY` configurada no `.env` do backend. Após alterar a configuração, recrie o serviço `app`. O primeiro teste com chave real continua pendente.
+
+## Acesso e limites
+
+A API mantém sessões de 12 horas em cookie HttpOnly e SameSite Strict. O frontend consulta `GET /auth/session` e mantém apenas o token CSRF em memória; não armazena JWT ou credencial de sessão em `localStorage`. Login, cadastro e logout ficam no grupo **Autenticação** do Swagger, que acrescenta CSRF automaticamente nas escritas.
+
+Por padrão, são permitidas 20 admissões de geração por conta e 100 para toda a instalação por dia UTC, intervalo mínimo de dez segundos, uma geração simultânea por conta e duas no total. Falhas após a admissão continuam contabilizadas. Esses limites controlam chamadas e concorrência; não representam um orçamento monetário.
+
+O processamento de PDFs exige administrador, aceita um arquivo por envio e executa uma operação por vez. A API roda sem root, com recursos limitados e proteção de filesystem; o parser nativo também possui teto próprio de memória e CPU. Hosts e origens locais são limitados por configuração. Uma implantação HTTPS deve definir `AUTH_COOKIE_SECURE=true` e suas listas explícitas de hosts/origens.
 
 ## Estado atual e limites
 
@@ -209,7 +230,9 @@ Este é um **MVP de desenvolvimento local**. A demonstração permite avaliar o 
 - O adaptador Gemini está implementado e coberto por testes com respostas HTTP simuladas; chamadas reais ainda não foram validadas.
 - O conteúdo oficial da BNCC não acompanha o repositório. A estruturação atual utiliza um perfil para uma cópia específica do documento; outros PDFs exigem um perfil compatível.
 - A validação de referências não certifica, por si só, a adequação pedagógica das questões nem a correção semântica das respostas. A revisão do professor continua necessária.
-- Upload de prova PDF como referência, autenticação completa, geração de imagens e exportação final em PDF ficam para etapas posteriores.
+- Cadastro/login e permissões estão implementados. Recuperação de senha, verificação de e-mail e MFA ficam para etapas posteriores.
+- Upload de prova PDF como referência, geração de imagens e exportação final em PDF ficam para etapas posteriores.
+- Avisos de segurança de componentes nativos e bibliotecas incorporadas ao Swagger exigem acompanhamento separado dos audits dos lockfiles. Sua exploração não foi demonstrada no fluxo atual; esta etapa de autenticação não atualiza esses componentes automaticamente.
 
 Os arquivos `.env` reais, dados locais, dependências instaladas e builds não são versionados. Os dois arquivos `.env.example` contêm somente configurações de exemplo, sem chaves ou senhas reais.
 

@@ -31,6 +31,9 @@ services:
     environment:
       APP_ENV: demo
       APP_DEBUG: "false"
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-false}"
+      AUTH_ALLOWED_HOSTS: "${AUTH_ALLOWED_HOSTS:-localhost,127.0.0.1,::1}"
+      AUTH_ALLOWED_ORIGINS: "${AUTH_ALLOWED_ORIGINS:-}"
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_DATABASE: gerador_de_provas_demo
@@ -39,6 +42,17 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 2
+    pids_limit: 96
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+      - /config:size=16m,uid=10001,gid=10001,mode=0700
+      - /data:size=16m,uid=10001,gid=10001,mode=0700
+      - /app/storage/bncc:size=128m,uid=10001,gid=10001,mode=0700
     command:
       - sh
       - -c

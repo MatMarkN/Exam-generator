@@ -1,8 +1,11 @@
-import { useEffect } from "react"
-import { BookOpen, BookCheck, FilePlus2, Files, Leaf, ArrowUpRight, UserRoundCog, FlaskConical, ChevronRight, PanelLeftClose } from "lucide-react"
+import { useEffect, useState } from "react"
+import { BookOpen, BookCheck, FilePlus2, Files, Leaf, ArrowUpRight, UserRoundCog, FlaskConical, ChevronRight, PanelLeftClose, LogOut, LoaderCircle } from "lucide-react"
 import { NavLink, Outlet, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { environment } from "@/lib/environment"
+import { useAuth } from "@/features/auth/AuthProvider"
+import { getErrorMessage } from "@/lib/api/client"
+import { Button } from "@/components/ui/button"
 
 const navigation = [
   { to: "/", label: "Criar prova", icon: FilePlus2, end: true },
@@ -31,12 +34,23 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
 }
 
 export default function AppShell() {
+  const auth = useAuth()
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState("")
   const { pathname } = useLocation()
   const current = pathname === "/" ? "Criar prova" : pathname === "/bncc" ? "BNCC" : pathname === "/professores" ? "Professores" : pathname === "/provas" ? "Minhas provas" : "Visualizar prova"
   useEffect(() => {
     document.title = current + " — Prova Clara"
     window.scrollTo(0, 0)
   }, [pathname, current])
+  async function logout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setLogoutError("")
+    try { await auth.logout() }
+    catch (failure) { setLogoutError(getErrorMessage(failure)) }
+    finally { setLoggingOut(false) }
+  }
   return <div className="min-h-screen">
     <a href="#conteudo" className="sr-only fixed left-4 top-4 z-50 rounded-lg bg-primary px-4 py-3 text-white focus:not-sr-only">Pular para o conteúdo</a>
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-[244px] flex-col border-r bg-[#fcfdfb] px-5 pb-5 pt-8 lg:flex">
@@ -66,11 +80,14 @@ export default function AppShell() {
               <FlaskConical className="size-3.5" aria-hidden="true" />{environment.label}
             </span>
             <span className="hidden text-xs text-muted-foreground xl:block">Uma boa prova começa com clareza.</span>
+            <span className="hidden max-w-36 truncate text-xs font-medium text-muted-foreground md:block" title={auth.user?.email}>{auth.user?.name}</span>
+            <Button type="button" variant="ghost" size="sm" className="shrink-0 px-2" disabled={loggingOut} onClick={() => void logout()} aria-label="Sair da conta">{loggingOut ? <LoaderCircle className="size-4 animate-spin" /> : <LogOut className="size-4" />}<span className="hidden sm:inline">Sair</span></Button>
           </div>
         </div>
         <Navigation mobile />
       </header>
       <main id="conteudo" tabIndex={-1} className="mx-auto min-h-[calc(100vh-76px)] max-w-[1420px] px-4 pb-10 pt-8 outline-none sm:px-8 lg:px-10 lg:pt-10">
+        {logoutError && <p role="alert" className="mb-5 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">{logoutError}</p>}
         <Outlet />
         <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t pt-5 text-[11px] leading-relaxed text-muted-foreground">
           <span>Feito para o tempo de quem ensina.</span>

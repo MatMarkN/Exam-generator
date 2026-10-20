@@ -28,6 +28,7 @@ use Tests\Support\BnccFixtures;
 use Tests\Support\CurriculumFixture;
 use Tests\Support\ExamFixture;
 use Tests\Support\GenerationHistoryFixture;
+use Tests\Support\AuthFixture;
 
 final class GenerationHistoryTest extends TestCase
 {
@@ -37,12 +38,14 @@ final class GenerationHistoryTest extends TestCase
     private int $documentId;
     private int $skillId;
     private array $teachers = [];
+    private array $session;
 
     protected function setUp(): void
     {
         $this->connections = new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php');
         $this->database = $this->connections->create();
-        $this->history = new GenerationHistoryRepository($this->database);
+        $this->session = (new AuthFixture($this->database))->create();
+        $this->history = new GenerationHistoryRepository($this->database, $this->session['user']->id);
         $fixtures = new BnccFixtures($this->database);
         $this->documentId = $fixtures->document(['status' => 'ready', 'ready_at' => '2026-01-01 00:00:00',
             'structured_at' => '2026-01-01 00:00:00', 'structure_profile' => 'synthetic-history-test']);
@@ -74,6 +77,7 @@ final class GenerationHistoryTest extends TestCase
         if ($this->teachers !== []) {
             $this->database->delete('teachers', ['id' => $this->teachers]);
         }
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testCommittedHistoryIsVisibleBeforeProviderWithoutHoldingATransaction(): void
@@ -99,7 +103,7 @@ final class GenerationHistoryTest extends TestCase
         self::assertSame($result->exam()['id'], $saved['exam_id']);
         self::assertSame($teacher, $saved['teacher_id']);
         self::assertSame('Professor SINTÉTICO privado', $saved['requester_name']);
-        self::assertFalse($saved['requester_verified']);
+        self::assertTrue($saved['requester_verified']);
         self::assertSame($this->documentId, $saved['bncc_document_id']);
         self::assertSame('0.00000000', $saved['estimated_cost']['amount']);
         self::assertSame($result->generation()['total_duration_ms'], $saved['total_duration_ms']);
@@ -386,7 +390,7 @@ final class GenerationHistoryTest extends TestCase
 
     private function teacher(): int
     {
-        $this->database->insert('teachers', ['name' => 'Professor SINTÉTICO privado']);
+        $this->database->insert('teachers', ['name' => 'Professor SINTÉTICO privado', 'user_id' => $this->session['user']->id]);
         $id = (int) $this->database->id();
         $this->teachers[] = $id;
         return $id;
@@ -405,7 +409,7 @@ final class GenerationHistoryTest extends TestCase
     private function service(AIProviderInterface $provider): ExamGenerationService
     {
         return new ExamGenerationService(new BnccContextService(new BnccContextRepository($this->database), new BnccTopicMatcher()),
-            $provider, history: $this->history, teachers: new TeacherRepository($this->database));
+            $provider, history: $this->history, teachers: new TeacherRepository($this->database, $this->session['user']->id));
     }
 
     private function during(FakeAIProvider $fake, \Closure $callback): AIProviderInterface
@@ -436,7 +440,9 @@ final class GenerationHistoryTest extends TestCase
             $request->getBody()->write(json_encode($input));
             $request->getBody()->rewind();
         }
-        return $app->handle($request);
+        // This class verifies history semantics, not the separately tested interval policy.
+        $this->database->update('generation_quota_users', ['last_admitted_at' => null], ['user_id' => $this->session['user']->id]);
+        return $app->handle((new AuthFixture($this->database))->authorize($request, $this->session));
     }
 
     private function body(ResponseInterface $response): array

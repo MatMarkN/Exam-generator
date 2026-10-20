@@ -20,6 +20,10 @@ export type ExamLookup = components["schemas"]["ExamLookup"]
 export type AnswerKeyLookup = components["schemas"]["AnswerKeyLookup"]
 export interface Page<T> { items: T[]; next_before_id: number | null }
 
+export type AuthUser = components["schemas"]["AuthUser"]
+export type AuthSession = components["schemas"]["AuthSession"]
+export type AuthRegister = components["schemas"]["AuthRegister"]
+
 export type BnccDocumentList = components["schemas"]["BnccDocumentList"]
 export type BnccDocument = BnccDocumentList["items"][number]
 export type BnccReleaseList = components["schemas"]["BnccReleaseList"]

@@ -44,7 +44,7 @@ final class MigrationLifecycleTest extends TestCase
             $this->migrations->migrate('test');
             $this->migrations->seed('test', 'InitialSchoolCatalogs');
 
-            self::assertSame(8, $this->database->count('phinxlog'));
+            self::assertSame(11, $this->database->count('phinxlog'));
             self::assertSame(9, $this->database->count('school_grades'));
             self::assertSame(9, $this->database->count('subjects'));
             self::assertSame(0, $this->database->count('teachers'));
@@ -53,7 +53,7 @@ final class MigrationLifecycleTest extends TestCase
             // Aplicar novamente deve manter os registros e o histórico.
             $before = $this->database->select('school_grades', '*', ['ORDER' => ['id' => 'ASC']]);
             $this->migrations->migrate('test');
-            self::assertSame(8, $this->database->count('phinxlog'));
+            self::assertSame(11, $this->database->count('phinxlog'));
             self::assertSame($before, $this->database->select('school_grades', '*', ['ORDER' => ['id' => 'ASC']]));
         } finally {
             $this->migrations->migrate('test');
@@ -102,7 +102,7 @@ final class MigrationLifecycleTest extends TestCase
                 AND table_name IN ('generation_history', 'exams', 'exam_answers')")->fetchColumn());
             self::assertSame($document, $this->database->get('bncc_documents', '*', ['id' => $document['id']]));
             $this->migrations->migrate('test');
-            self::assertSame(8, $this->database->count('phinxlog'));
+            self::assertSame(11, $this->database->count('phinxlog'));
             self::assertSame($pages, $this->database->select('bncc_document_pages', '*', ['document_id' => $document['id'], 'ORDER' => ['page_number' => 'ASC']]));
             foreach (['generation_history', 'exams', 'exam_answers'] as $table) {
                 self::assertSame(0, $this->database->count($table));
@@ -131,7 +131,7 @@ final class MigrationLifecycleTest extends TestCase
             self::assertSame($grades, $this->database->select('school_grades', '*', ['ORDER' => ['id' => 'ASC']]));
 
             $this->migrations->migrate('test');
-            self::assertSame(8, $this->database->count('phinxlog'));
+            self::assertSame(11, $this->database->count('phinxlog'));
             self::assertSame(0, $this->database->count('bncc_documents'));
         } finally {
             $this->migrations->migrate('test');

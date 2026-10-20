@@ -22,6 +22,7 @@ final class ExamGenerationService
         private readonly ?GenerationHistoryRepository $history = null,
         private readonly GenerationCostEstimator $costs = new GenerationCostEstimator(),
         private readonly ?TeacherRepository $teachers = null,
+        private readonly ?GenerationGuard $guard = null,
     ) {
     }
 
@@ -59,6 +60,7 @@ final class ExamGenerationService
                 $this->history->prepared($id, $aiRequest, $context);
             }
             $stage = 'provider';
+            $this->guard?->acquire();
             // Consultas e gravações anteriores terminaram; não mantemos transação durante a IA.
             $response = $this->provider->generate($aiRequest);
             $cost = $this->costs->estimate($response);
@@ -109,6 +111,8 @@ final class ExamGenerationService
             }
             $this->log('generation_failed', $id, $stage, $exception);
             throw new RecordedGenerationException($id, $exception);
+        } finally {
+            $this->guard?->release();
         }
     }
 

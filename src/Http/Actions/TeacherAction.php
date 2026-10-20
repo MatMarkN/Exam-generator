@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Actions;
 
+use App\Application\Auth\AuthenticatedUser;
 use App\Application\Teachers\TeacherException;
 use App\Application\Teachers\TeacherInput;
 use App\Http\JsonResponder;
@@ -23,18 +24,18 @@ final class TeacherAction
         return JsonResponder::run($response, function () use ($request): array {
             $input = $this->body($request);
             TeacherInput::profile($input, true);
-            return $this->repository()->create($input);
+            return $this->repository($request)->create($input);
         }, 201, '/teachers/');
     }
 
     public function listing(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return JsonResponder::run($response, fn (): array => $this->repository()->listing($request->getQueryParams()));
+        return JsonResponder::run($response, fn (): array => $this->repository($request)->listing($request->getQueryParams()));
     }
 
     public function show(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        return JsonResponder::run($response, fn (): array => $this->repository()->find(TeacherRepository::positiveId($args['id'])));
+        return JsonResponder::run($response, fn (): array => $this->repository($request)->find(TeacherRepository::positiveId($args['id'])));
     }
 
     public function update(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -42,13 +43,13 @@ final class TeacherAction
         return JsonResponder::run($response, function () use ($request, $args): array {
             $input = $this->body($request);
             TeacherInput::profile($input);
-            return $this->repository()->update(TeacherRepository::positiveId($args['id']), $input);
+            return $this->repository($request)->update(TeacherRepository::positiveId($args['id']), $input);
         });
     }
 
     public function settings(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        return JsonResponder::run($response, fn (): array => $this->repository()->settings(TeacherRepository::positiveId($args['id'])));
+        return JsonResponder::run($response, fn (): array => $this->repository($request)->settings(TeacherRepository::positiveId($args['id'])));
     }
 
     public function updateSettings(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -56,13 +57,13 @@ final class TeacherAction
         return JsonResponder::run($response, function () use ($request, $args): array {
             $input = $this->body($request);
             TeacherInput::settings($input);
-            return $this->repository()->updateSettings(TeacherRepository::positiveId($args['id']), $input);
+            return $this->repository($request)->updateSettings(TeacherRepository::positiveId($args['id']), $input);
         });
     }
 
-    private function repository(): TeacherRepository
+    private function repository(ServerRequestInterface $request): TeacherRepository
     {
-        return new TeacherRepository($this->connections->create());
+        return new TeacherRepository($this->connections->create(), AuthenticatedUser::fromRequest($request)->id);
     }
 
     private function body(ServerRequestInterface $request): array

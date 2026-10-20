@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tests\Support\CurriculumFixture;
+use Tests\Support\AuthFixture;
 use Tests\Support\OpenApiAssertions;
 
 final class BnccReleaseHttpTest extends TestCase
@@ -23,11 +24,13 @@ final class BnccReleaseHttpTest extends TestCase
     private CurriculumFixture $fixture;
     private BnccCurriculumRepository $repository;
     private int $documentId;
+    private array $session;
 
     protected function setUp(): void
     {
         $this->app = require __DIR__ . '/../../config/bootstrap.php';
         $this->database = (new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php'))->create();
+        $this->session = (new AuthFixture($this->database))->create();
         $this->fixture = new CurriculumFixture($this->database);
         $this->repository = new BnccCurriculumRepository($this->database);
         $document = $this->fixture->document();
@@ -50,6 +53,7 @@ final class BnccReleaseHttpTest extends TestCase
         if (isset($this->documentId)) {
             $this->fixture->remove($this->documentId);
         }
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testListAndFiltersExposeOnlyTheSelectedScopeWithoutApprovingAnything(): void
@@ -191,7 +195,7 @@ final class BnccReleaseHttpTest extends TestCase
             $request->getBody()->write($raw ?? json_encode($body, JSON_THROW_ON_ERROR));
             $request->getBody()->rewind();
         }
-        $response = $this->app->handle($request);
+        $response = $this->app->handle((new AuthFixture($this->database))->authorize($request, $this->session));
         return [$response->getStatusCode(), json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR)];
     }
 }

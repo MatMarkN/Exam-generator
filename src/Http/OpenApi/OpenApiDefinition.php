@@ -23,9 +23,27 @@ final class OpenApiDefinition
         $schemas = ApiSchemas::build();
         $id = self::parameter('id', ApiSchemas::integer(), 'path', 'ID neste ambiente; use o retornado pela operação anterior.', 1);
         $paths = [];
+        $paths['/auth/register']['post'] = self::operation('registerUser', 'Autenticação', 'Criar uma conta', 'AuthSession',
+            'Cadastra uma conta de professor, inicia uma sessão de 12 horas e envia cookie HttpOnly/SameSite Strict. '
+            . 'Senha de 12 a 128 caracteres, até 512 bytes. Não aceita papel administrativo no JSON. '
+            . 'Limite de cinco cadastros por IP a cada hora. Corpo máximo: 8 KiB.',
+            body: self::body('AuthRegister', ['account' => ['summary' => 'Conta de exemplo — troque e-mail e senha',
+                'value' => ['name' => 'Professor Exemplo', 'email' => 'professor@example.test', 'password' => 'TroqueEstaSenha123!', 'password_confirmation' => 'TroqueEstaSenha123!']]]),
+            success: 201, errors: [403, 409, 413, 415, 422, 429, 503]);
+        $paths['/auth/login']['post'] = self::operation('loginUser', 'Autenticação', 'Entrar na conta', 'AuthSession',
+            'Valida as credenciais na API e substitui a sessão atual por um novo cookie aleatório. '
+            . 'E-mail ou senha incorretos devolvem uma mensagem genérica. Até 10 tentativas por e-mail e 60 por IP em 15 minutos. '
+            . 'O IP é o observado pelo servidor; atrás de proxy ele pode ser compartilhado. Corpo máximo: 8 KiB.',
+            body: self::body('AuthLogin', ['account' => ['summary' => 'Use uma conta cadastrada',
+                'value' => ['email' => 'professor@example.test', 'password' => 'TroqueEstaSenha123!']]]), errors: [401, 403, 413, 415, 422, 429, 503]);
+        $paths['/auth/session']['get'] = self::operation('getAuthSession', 'Autenticação', 'Validar a sessão atual', 'AuthSession',
+            'Retorna o usuário autenticado e o token CSRF. O cookie de autenticação nunca aparece no JSON. '
+            . 'Envie X-CSRF-Token em todas as operações de escrita. O Swagger busca esse token automaticamente antes de enviar alterações.', errors: [401, 403, 503]);
+        $paths['/auth/logout']['post'] = self::operation('logoutUser', 'Autenticação', 'Encerrar a sessão', 'AuthLogout',
+            'Revoga a sessão no servidor e expira o cookie atual. Exige sessão e X-CSRF-Token.', errors: [401, 403, 503]);
         $paths['/teachers']['post'] = self::operation('createTeacher', 'Professores', 'Cadastrar um professor', 'Teacher',
             'Cria o professor e suas preferências padrão juntos: escola em branco, Arial, tamanho 12. '
-            . 'Copie o id retornado para as próximas operações. Não há autenticação. Corpo máximo: 64 KiB. '
+            . 'Copie o id retornado para as próximas operações. A sessão define o proprietário. Corpo máximo: 64 KiB. '
             . 'O e-mail é opcional e único; use null ou omita quando não precisar cadastrá-lo.',
             body: self::body('TeacherCreate', ['teacher' => ['summary' => 'Professor de exemplo — dados fictícios',
                 'value' => ['name' => 'Carolina Silva', 'email' => null]]]), success: 201, errors: [409, 413, 415, 422, 503]);
@@ -81,7 +99,7 @@ final class OpenApiDefinition
             ], errors: [422, 503]);
         $paths['/generations/{id}']['get'] = self::operation('getGeneration', 'Histórico', 'Inspecionar uma tentativa', 'GenerationDetail',
             'Use generation.id (não confundir com exam.id). Inclui pedido, prompt, contexto, resultado ou erro. '
-            . 'teacher_id é declarado, não autenticado. Uma interrupção pode deixar status running.', [$id], errors: [404, 422, 503]);
+            . 'Somente o proprietário autenticado tem acesso. Uma interrupção pode deixar status running.', [$id], errors: [404, 422, 503]);
         $paths['/bncc/context']['post'] = self::operation('findBnccContext', 'Contexto BNCC', 'Buscar habilidades por matéria, ano e tópicos', 'BnccContext',
             'Consulta sem escrita. Usa apenas uma revisão liberada para a matéria e o ano solicitados, globalmente ou por escopo. Corpo máximo: 8 KiB. '
             . 'Se algum tópico não tiver correspondência lexical, retorna 422 topics_without_matches; currículo não liberado retorna 409.',
@@ -177,13 +195,32 @@ final class OpenApiDefinition
                 'sample' => ['summary' => 'Exemplo de formato — dados sintéticos, IDs ilustrativos', 'value' => $value],
             ];
         }
-        return ['openapi' => '3.1.0', 'info' => ['title' => 'Gerador de Provas — ' . ($demo ? 'Simulação' : 'API principal'), 'version' => '1.1.0',
+        foreach ($paths as $path => &$operations) {
+            foreach ($operations as $method => &$operation) {
+                $public = in_array($path, ['/auth/register', '/auth/login', '/health', '/health/database'], true);
+                $operation['security'] = $public ? [] : [['cookieAuth' => [], ...($method === 'get' ? [] : ['csrfToken' => []])]];
+                if (!$public) {
+                    foreach ([401 => 'Sessão ausente ou expirada.', 403 => 'CSRF, origem, Host ou papel administrativo incompatíveis.'] as $status => $description) {
+                        $operation['responses'][(string) $status] = ['description' => $description, 'content' => ['application/json' => ['schema' => ApiSchemas::ref('Error')]]];
+                    }
+                }
+                if (str_starts_with($path, '/bncc/documents') && $method !== 'get') {
+                    $operation['description'] .= ' **Somente administrador autenticado.**';
+                }
+            }
+            unset($operation);
+        }
+        unset($operations);
+        return ['openapi' => '3.1.0', 'info' => ['title' => 'Gerador de Provas — ' . ($demo ? 'Simulação' : 'API principal'), 'version' => '1.2.0',
             'description' => ($demo ? 'Ambiente separado com FakeAIProvider e currículo sintético. Comece por **Provas → POST /exams/generate**.'
                 : 'Backend do Ensino Fundamental. As operações usam os dados locais e Gemini quando o currículo está liberado e a chave configurada.')
-                . "\n\nCada Execute faz uma chamada HTTP real a este ambiente. Ainda não há autenticação. Horários são UTC. A prova e o gabarito ficam separados; a validação BNCC não substitui a revisão do professor."],
+                . "\n\nCadastre-se ou entre em Autenticação antes das operações de negócio. A API valida a sessão por cookie HttpOnly e exige CSRF nas escritas. Importação e revisão BNCC exigem administrador. Cada Execute faz uma chamada HTTP real. Horários são UTC. A validação BNCC não substitui a revisão do professor."],
             'servers' => [['url' => '/', 'description' => 'Mesmo host e porta desta página']],
-            'tags' => array_map(static fn (string $name): array => ['name' => $name], ['Professores', 'Catálogos', 'Provas', 'Histórico', 'Contexto BNCC', 'Documentos BNCC', 'Revisão BNCC', 'Saúde']),
-            'paths' => $paths, 'components' => ['schemas' => $schemas]];
+            'tags' => array_map(static fn (string $name): array => ['name' => $name], ['Autenticação', 'Professores', 'Catálogos', 'Provas', 'Histórico', 'Contexto BNCC', 'Documentos BNCC', 'Revisão BNCC', 'Saúde']),
+            'paths' => $paths, 'components' => ['schemas' => $schemas, 'securitySchemes' => [
+                'cookieAuth' => ['type' => 'apiKey', 'in' => 'cookie', 'name' => $demo ? 'prova_clara_demo_session' : 'prova_clara_session', 'description' => 'Cookie HttpOnly emitido por login/cadastro. Não cole tokens manualmente.'],
+                'csrfToken' => ['type' => 'apiKey', 'in' => 'header', 'name' => 'X-CSRF-Token', 'description' => 'Token de GET /auth/session; preenchido pelo inicializador local do Swagger.'],
+            ]]];
     }
 
     private static function parameter(string $name, array $schema, string $in = 'query', string $description = '', mixed $example = null): array
@@ -207,9 +244,10 @@ final class OpenApiDefinition
         }
         foreach ($errors as $status) {
             $responses[(string) $status] = ['description' => match ($status) {
+                401 => 'Credenciais ou sessão inválidas.', 403 => 'Origem, Host, CSRF ou permissão incompatíveis.',
                 404 => 'Registro não encontrado neste ambiente.', 409 => 'Conflito, e-mail já cadastrado ou currículo ainda não liberado.',
                 413 => 'Envio maior que o limite.', 415 => 'Content-Type incompatível.', 422 => 'Entrada inválida, tópico sem correspondência ou recusa do provedor.',
-                429 => 'Limite do provedor atingido.', 502 => 'Falha do provedor ou resposta de prova inválida.',
+                429 => 'Limite de acesso, geração ou fornecedor atingido.', 502 => 'Falha do provedor ou resposta de prova inválida.',
                 503 => 'Banco/provedor indisponível ou IA sem configuração.', 504 => 'Tempo limite excedido.',
             }, 'content' => ['application/json' => ['schema' => ApiSchemas::ref('Error')]]];
             if (in_array($status, [429, 503], true)) {

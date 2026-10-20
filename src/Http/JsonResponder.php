@@ -10,6 +10,8 @@ use App\Application\Bncc\ImportException;
 use App\Application\Exams\ExamGenerationException;
 use App\Application\Exams\RecordedGenerationException;
 use App\Application\Teachers\TeacherException;
+use App\Application\Auth\AuthException;
+use App\Application\Exams\GenerationLimitException;
 use Psr\Http\Message\ResponseInterface;
 
 final class JsonResponder
@@ -27,6 +29,18 @@ final class JsonResponder
             if ($status === 201 && isset($data['id'])) {
                 $response = $response->withHeader('Location', $locationPrefix . $data['id']);
             }
+        } catch (AuthException $exception) {
+            $status = $exception->status;
+            $data = ['error' => ['code' => $exception->reason, 'message' => $exception->getMessage()]];
+            if ($exception->retryAfterSeconds !== null) {
+                $response = $response->withHeader('Retry-After', (string) $exception->retryAfterSeconds);
+                $data['error']['retry_after_seconds'] = $exception->retryAfterSeconds;
+            }
+        } catch (GenerationLimitException $exception) {
+            $status = 429;
+            $response = $response->withHeader('Retry-After', (string) $exception->retryAfterSeconds);
+            $data = ['error' => ['code' => $exception->reason, 'message' => $exception->getMessage(),
+                'retry_after_seconds' => $exception->retryAfterSeconds, 'retryable' => true]];
         } catch (AIProviderException $exception) {
             $status = match ($exception->reason) {
                 AIErrorReason::ConfigurationMissing, AIErrorReason::BillingRequired, AIErrorReason::Unavailable => 503,
@@ -51,13 +65,16 @@ final class JsonResponder
                 'not_found' => 404,
                 'duplicate_document', 'revision_conflict', 'stored_file_changed', 'invalid_storage_path',
                 'already_structured', 'immutable_document', 'not_structured', 'review_incomplete',
-                'curriculum_not_ready', 'document_not_ready', 'curriculum_changed' => 409,
+                'curriculum_not_ready', 'document_not_ready', 'curriculum_changed', 'pdf_processing_busy' => 409,
                 'file_too_large', 'payload_too_large' => 413,
                 'unsupported_media_type' => 415,
                 'extraction_timeout' => 504,
                 default => 422,
             };
             $data = ['error' => ['code' => $exception->reason, 'message' => $exception->getMessage(), ...$exception->details]];
+            if ($exception->reason === 'pdf_processing_busy') {
+                $response = $response->withHeader('Retry-After', '5');
+            }
         } catch (\Throwable $exception) {
             error_log('request_failed exception=' . $exception::class);
             $status = $exception instanceof \PDOException ? 503 : 500;

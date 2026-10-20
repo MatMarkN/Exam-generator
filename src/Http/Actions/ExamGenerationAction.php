@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace App\Http\Actions;
 
 use App\Application\AI\AIProviderInterface;
+use App\Application\Auth\AuthenticatedUser;
 use App\Application\Bncc\BnccContextService;
 use App\Application\Bncc\BnccTopicMatcher;
 use App\Application\Bncc\ImportException;
 use App\Application\Exams\ExamGenerationRequest;
 use App\Application\Exams\ExamGenerationService;
 use App\Application\Exams\GenerationCostEstimator;
+use App\Application\Exams\GenerationGuard;
 use App\Http\JsonResponder;
 use App\Infrastructure\Persistence\BnccContextRepository;
 use App\Infrastructure\Persistence\DatabaseConnectionFactory;
 use App\Infrastructure\Persistence\GenerationHistoryRepository;
+use App\Infrastructure\Persistence\GenerationQuotaRepository;
 use App\Infrastructure\Persistence\TeacherRepository;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -31,6 +34,7 @@ final class ExamGenerationAction
     public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         return JsonResponder::run($response, function () use ($request): array {
+            $user = AuthenticatedUser::fromRequest($request);
             if (strtolower(trim(explode(';', $request->getHeaderLine('Content-Type'))[0])) !== 'application/json') {
                 throw new ImportException('unsupported_media_type', 'Envie o pedido como application/json.');
             }
@@ -61,8 +65,10 @@ final class ExamGenerationAction
             $database = $this->connections->create();
             $bncc = new BnccContextService(new BnccContextRepository($database), new BnccTopicMatcher());
             $result = (new ExamGenerationService($bncc, $this->provider,
-                history: new GenerationHistoryRepository($database), costs: $this->costs,
-                teachers: new TeacherRepository($database)))->generate($input);
+                history: new GenerationHistoryRepository($database, $user->id), costs: $this->costs,
+                teachers: new TeacherRepository($database, $user->id),
+                guard: new GenerationGuard(new GenerationQuotaRepository($database), $user->id,
+                    require __DIR__ . '/../../../config/generation-limits.php')))->generate($input);
             return ['exam' => $result->exam(), 'answer_key' => $result->answerKey(),
                 'bncc_context' => $result->bnccContext(), 'generation' => $result->generation()];
         });

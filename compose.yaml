@@ -9,6 +9,13 @@ services:
     environment:
       APP_DEBUG: "${APP_DEBUG:-false}"
       APP_ENV: local
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-false}"
+      AUTH_ALLOWED_HOSTS: "${AUTH_ALLOWED_HOSTS:-localhost,127.0.0.1,::1}"
+      AUTH_ALLOWED_ORIGINS: "${AUTH_ALLOWED_ORIGINS:-}"
+      GENERATION_USER_DAILY_LIMIT: "${GENERATION_USER_DAILY_LIMIT:-20}"
+      GENERATION_GLOBAL_DAILY_LIMIT: "${GENERATION_GLOBAL_DAILY_LIMIT:-100}"
+      GENERATION_MIN_INTERVAL_SECONDS: "${GENERATION_MIN_INTERVAL_SECONDS:-10}"
+      GENERATION_MAX_CONCURRENT: "${GENERATION_MAX_CONCURRENT:-2}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
       DB_HOST: mysql
@@ -19,12 +26,22 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 2
+    pids_limit: 96
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+      - /config:size=16m,uid=10001,gid=10001,mode=0700
+      - /data:size=16m,uid=10001,gid=10001,mode=0700
     volumes:
       - ./public:/app/public:ro
       - ./src:/app/src:ro
       - ./config:/app/config:ro
       - ./Caddyfile:/etc/frankenphp/Caddyfile:ro
-      - ./database:/app/database
+      - ./database:/app/database:ro
       - ./tests:/app/tests:ro
       - ./phinx.php:/app/phinx.php:ro
       - ./phpunit.xml:/app/phpunit.xml:ro

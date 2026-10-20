@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Actions;
 
 use App\Application\Bncc\ImportException;
+use App\Application\Bncc\PdfProcessingGuard;
 use App\Application\Bncc\StructureBnccDocument;
 use App\Http\JsonResponder;
 use App\Infrastructure\Documents\LocalPdfStorage;
@@ -28,7 +29,7 @@ final class BnccCurriculumAction
             $database = $this->connections->create();
             $service = new StructureBnccDocument(new BnccDocumentRepository($database), new BnccCurriculumRepository($database),
                 new LocalPdfStorage($this->storagePath), new PopplerLayoutExtractor(new ProcessRunner()));
-            return $service->structure($this->integer($args['id']));
+            return (new PdfProcessingGuard($database))->run(fn (): array => $service->structure($this->integer($args['id'])));
         });
     }
 

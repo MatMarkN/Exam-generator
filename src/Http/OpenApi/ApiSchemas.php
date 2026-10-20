@@ -249,6 +249,18 @@ final class ApiSchemas
             'response_format' => ['type' => 'string', 'enum' => ['unavailable', 'validated', 'unvalidated_json']],
             'response' => ['description' => 'Objeto validado no sucesso; string JSON não validada em certas falhas; null se indisponível.',
                 'anyOf' => [self::object(['exam' => self::ref('ExamContent'), 'answer_key' => self::ref('AnswerKey')]), $text, ['type' => 'null']]]]);
+        $schemas['AuthUser'] = self::object(['id' => $id, 'name' => ['type' => 'string', 'minLength' => 2, 'maxLength' => 160],
+            'email' => ['type' => 'string', 'format' => 'email', 'maxLength' => 254], 'role' => ['type' => 'string', 'enum' => ['teacher', 'admin']]]);
+        $schemas['AuthSession'] = self::object(['user' => self::ref('AuthUser'), 'csrf_token' => ['type' => 'string', 'pattern' => '^[a-f0-9]{64}$']]);
+        $schemas['AuthLogin'] = self::object(['email' => ['type' => 'string', 'format' => 'email', 'maxLength' => 254],
+            'password' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 128, 'writeOnly' => true]]);
+        $schemas['AuthRegister'] = self::object(['name' => ['type' => 'string', 'minLength' => 2, 'maxLength' => 160],
+            'email' => ['type' => 'string', 'format' => 'email', 'maxLength' => 254],
+            'password' => ['type' => 'string', 'minLength' => 12, 'maxLength' => 128, 'writeOnly' => true],
+            'password_confirmation' => ['type' => 'string', 'minLength' => 12, 'maxLength' => 128, 'writeOnly' => true]]);
+        $schemas['AuthLogout'] = self::object(['success' => ['const' => true]]);
+        $schemas['GenerationSummary']['properties']['requester_verified'] = $bool;
+        $schemas['GenerationDetail']['properties']['requester_verified'] = $bool;
         return $schemas;
     }
 }

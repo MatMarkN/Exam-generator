@@ -6,6 +6,7 @@ namespace App\Http\Actions;
 
 use App\Application\Bncc\ImportBnccDocument;
 use App\Application\Bncc\ImportException;
+use App\Application\Bncc\PdfProcessingGuard;
 use App\Http\JsonResponder;
 use App\Infrastructure\Documents\LocalPdfStorage;
 use App\Infrastructure\Documents\PopplerPdfExtractor;
@@ -34,12 +35,17 @@ final class BnccDocumentAction
                 throw new ImportException('unsupported_media_type', 'Use multipart/form-data com pdf, title e version_label.');
             }
             $fields = $request->getParsedBody();
+            if (count($request->getUploadedFiles()) !== 1) {
+                throw new ImportException('invalid_input', 'Envie apenas um PDF por pedido.');
+            }
             $upload = $request->getUploadedFiles()['pdf'] ?? null;
             if (!$upload instanceof UploadedFileInterface || !is_array($fields)
                 || !is_string($fields['title'] ?? null) || !is_string($fields['version_label'] ?? null)) {
                 throw new ImportException('invalid_input', 'Envie um PDF no campo pdf e os textos title e version_label.');
             }
-            return $this->publicDocument($this->service()->import($upload, $fields['title'], $fields['version_label']));
+            return (new PdfProcessingGuard($this->connections->create()))->run(
+                fn (): array => $this->publicDocument($this->service()->import($upload, $fields['title'], $fields['version_label'])),
+            );
         }, 201);
     }
 
@@ -70,7 +76,9 @@ final class BnccDocumentAction
 
     public function reprocess(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        return $this->respond($response, fn (): array => $this->publicDocument($this->service()->reprocess($this->positiveInteger($args['id']))), 201);
+        return $this->respond($response, fn (): array => (new PdfProcessingGuard($this->connections->create()))->run(
+            fn (): array => $this->publicDocument($this->service()->reprocess($this->positiveInteger($args['id']))),
+        ), 201);
     }
 
     private function service(): ImportBnccDocument

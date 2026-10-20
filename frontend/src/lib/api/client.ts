@@ -1,18 +1,21 @@
 import { environment } from "@/lib/environment"
+import { expireSession, getCsrfToken, getSessionVersion } from "@/features/auth/session-state"
 import type {
   Teacher, TeacherCreate, TeacherUpdate, TeacherSettings, TeacherSettingsUpdate,
   Subject, SchoolGrade, Page, ExamRequest, GenerationResult, GenerationSummary,
   GenerationDetail, ExamLookup, AnswerKeyLookup, GenerationStatus,
   BnccDocumentList, BnccReleaseList, BnccRelease, BnccSkillList,
   BnccSkillDetail, BnccCompetencyList, BnccReviewRequest,
+  AuthRegister, AuthSession,
 } from "./types"
 
-interface ErrorBody { code?: string; message?: string; generation_id?: number }
+interface ErrorBody { code?: string; message?: string; generation_id?: number; retry_after_seconds?: number }
 
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
   readonly generationId?: number
+  readonly retryAfterSeconds?: number
 
   constructor(status: number, error: ErrorBody) {
     super(error.message || "Não foi possível concluir a operação.")
@@ -20,6 +23,7 @@ export class ApiError extends Error {
     this.status = status
     this.code = error.code || "unknown_error"
     this.generationId = error.generation_id
+    this.retryAfterSeconds = error.retry_after_seconds
   }
 }
 
@@ -28,13 +32,19 @@ export async function request<T>(path: string, options: { method?: "GET" | "POST
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), path === "/exams/generate" ? 100_000 : 20_000)
   try {
+    const csrf = getCsrfToken()
+    const sessionVersion = getSessionVersion()
+    const write = options.method !== undefined && options.method !== "GET"
     const response = await fetch(environment.apiBase + path, {
       method: options.method || "GET",
-      headers: { Accept: "application/json", ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}) },
+      credentials: "same-origin",
+      headers: { Accept: "application/json", ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(write && csrf && path !== "/auth/login" && path !== "/auth/register" ? { "X-CSRF-Token": csrf } : {}) },
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,
       cache: "no-store",
     })
+    if (response.status === 401 && path !== "/auth/login" && path !== "/auth/register") expireSession(sessionVersion)
     const raw = await response.text()
     let data: unknown
     try { data = JSON.parse(raw) } catch {
@@ -42,7 +52,9 @@ export async function request<T>(path: string, options: { method?: "GET" | "POST
     }
     if (!response.ok) {
       const error = (data as { error?: ErrorBody })?.error
-      throw new ApiError(response.status, error || {})
+      const retryHeader = response.headers.get("Retry-After")
+      const retry = retryHeader && /^\d+$/.test(retryHeader) ? Number(retryHeader) : undefined
+      throw new ApiError(response.status, { ...error, retry_after_seconds: error?.retry_after_seconds ?? retry })
     }
     return data as T
   } catch (error) {
@@ -69,10 +81,27 @@ export function getErrorMessage(error: unknown): string {
       ai_configuration_missing: "A integração de IA ainda precisa ser configurada no servidor.",
       duplicate_email: "Este e-mail já está cadastrado para outro professor.",
       not_found: "Este registro não foi encontrado. Ele pode pertencer a outro ambiente.",
+      authentication_required: "Entre na sua conta para continuar.",
+      auth_required: "Sua sessão terminou. Entre novamente para continuar.",
+      unauthenticated: "Sua sessão terminou. Entre novamente para continuar.",
+      invalid_credentials: "E-mail ou senha incorretos.",
+      forbidden: "Sua conta não tem permissão para esta operação.",
+      admin_required: "Esta operação está disponível somente para administradores.",
+      csrf_invalid: "Não foi possível validar esta operação. Recarregue a página e tente novamente.",
     } as Record<string, string>)[error.code] || error.message
-    return error.generationId ? message + " Tentativa registrada: " + error.generationId + "." : message
+    const limited = error.status === 429 ? message + (error.retryAfterSeconds !== undefined
+      ? " Aguarde " + retryDuration(error.retryAfterSeconds) + " antes de tentar novamente."
+      : " Aguarde antes de tentar novamente.") : message
+    return error.generationId ? limited + " Tentativa registrada: " + error.generationId + "." : limited
   }
   return error instanceof Error ? error.message : "Não foi possível concluir a operação."
+}
+
+function retryDuration(seconds: number) {
+  if (seconds >= 3600) { const count = Math.ceil(seconds / 3600); return count + (count === 1 ? " hora" : " horas") }
+  if (seconds >= 60) { const count = Math.ceil(seconds / 60); return count + (count === 1 ? " minuto" : " minutos") }
+  const count = Math.max(1, Math.ceil(seconds))
+  return count + (count === 1 ? " segundo" : " segundos")
 }
 
 function queryString(values: Record<string, string | number | undefined>) {
@@ -82,6 +111,10 @@ function queryString(values: Record<string, string | number | undefined>) {
 }
 
 export const api = {
+  session: () => request<AuthSession>("/auth/session"),
+  login: (body: { email: string; password: string }) => request<AuthSession>("/auth/login", { method: "POST", body }),
+  register: (body: AuthRegister) => request<AuthSession>("/auth/register", { method: "POST", body }),
+  logout: () => request<{ success: boolean }>("/auth/logout", { method: "POST", body: {} }),
   subjects: async () => (await request<{ items: Subject[] }>("/subjects")).items,
   grades: async () => (await request<{ items: SchoolGrade[] }>("/school-grades")).items,
   teachers: (query: { limit?: number; before_id?: number } = {}) => request<Page<Teacher>>("/teachers" + queryString(query)),

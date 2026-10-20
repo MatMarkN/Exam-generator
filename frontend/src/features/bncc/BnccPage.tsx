@@ -12,8 +12,11 @@ import { api, getErrorMessage } from "@/lib/api/client"
 import { environment } from "@/lib/environment"
 import type { BnccRelease } from "@/lib/api/types"
 import { CompetencyReviewCard, SkillReviewCard } from "./review-ui"
+import { useAuth } from "@/features/auth/AuthProvider"
 
 export default function BnccPage() {
+  const { user } = useAuth()
+  const canReview = user?.role === "admin"
   const [documentSelection, setDocumentSelection] = useState("")
   const [subject, setSubject] = useState("matematica")
   const [grade, setGrade] = useState(6)
@@ -28,6 +31,7 @@ export default function BnccPage() {
   return <div className="space-y-6">
     <PageHeader eyebrow="Referência curricular" title="Revisão da BNCC" description="Confira o conteúdo extraído do PDF e libere uma matéria e ano de cada vez." />
     {environment.isDemo && <p className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-relaxed text-amber-900">Este ambiente usa currículo sintético. A revisão e a liberação do documento oficial acontecem no ambiente principal.</p>}
+    {!canReview && <p className="rounded-xl border bg-white px-5 py-4 text-sm leading-relaxed text-muted-foreground">Você pode consultar o currículo e sua disponibilidade. A importação, revisão e liberação da BNCC são realizadas por um administrador.</p>}
     <AsyncState loading={docs.isPending || subjects.isPending || grades.isPending} error={pageError ? getErrorMessage(pageError) : null} empty={!docs.isPending && !docs.isError && documents.length === 0 ? "Nenhum documento foi importado. Importe e estruture o PDF da BNCC pela API para iniciar a revisão." : false} onRetry={() => { void docs.refetch(); void subjects.refetch(); void grades.refetch() }}>
       <Card className="shadow-none"><CardContent className="grid gap-4 pt-6 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_160px]">
         <div className="min-w-0 space-y-2 [&_[data-slot=native-select-wrapper]]:w-full"><Label htmlFor="bncc-document">Documento</Label><NativeSelect id="bncc-document" className="w-full" value={String(documentId)} onChange={(event) => setDocumentSelection(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title} · revisão {document.revision}</option>)}</NativeSelect></div>
@@ -35,13 +39,13 @@ export default function BnccPage() {
         <div className="space-y-2 [&_[data-slot=native-select-wrapper]]:w-full"><Label htmlFor="bncc-grade">Ano escolar</Label><NativeSelect id="bncc-grade" value={grade} onChange={(event) => setGrade(Number(event.target.value))}>{grades.data?.map((item) => <option key={item.id} value={item.year_number}>{item.name}</option>)}</NativeSelect></div>
       </CardContent></Card>
       {documentId > 0 && <AsyncState loading={releases.isPending} error={releases.isError ? getErrorMessage(releases.error) : null} onRetry={() => void releases.refetch()}>
-        {scope ? <ScopeReview key={documentId + ":" + subject + ":" + grade} documentId={documentId} scope={scope} /> : <p className="rounded-xl border border-dashed bg-white p-6 text-sm leading-relaxed text-muted-foreground">Esta combinação de matéria e ano não está disponível no documento estruturado. Selecione outra combinação ou conclua a estruturação pela API.</p>}
+        {scope ? <ScopeReview key={documentId + ":" + subject + ":" + grade} documentId={documentId} scope={scope} canReview={canReview} /> : <p className="rounded-xl border border-dashed bg-white p-6 text-sm leading-relaxed text-muted-foreground">Esta combinação de matéria e ano não está disponível no documento estruturado. Selecione outra combinação ou solicite a estruturação ao administrador.</p>}
       </AsyncState>}
     </AsyncState>
   </div>
 }
 
-function ScopeReview({ documentId, scope }: { documentId: number; scope: BnccRelease }) {
+function ScopeReview({ documentId, scope, canReview }: { documentId: number; scope: BnccRelease; canReview: boolean }) {
   const client = useQueryClient()
   const filter = { subject: scope.subject.code, grade: scope.grade.year_number }
   const skills = useInfiniteQuery({
@@ -56,10 +60,10 @@ function ScopeReview({ documentId, scope }: { documentId: number; scope: BnccRel
   })
   const ready = scope.status === "ready"
   const reviewed = scope.review.skills.total > 0 && scope.review.competencies.total > 0 && scope.review.skills.approved === scope.review.skills.total && scope.review.competencies.approved === scope.review.competencies.total
-  const readOnly = ready || environment.isDemo
+  const readOnly = ready || environment.isDemo || !canReview
   return <div className="space-y-7">
     <section className={"rounded-2xl border p-5 sm:p-6 " + (ready ? "border-primary/20 bg-primary/5" : "border-border bg-white")} aria-label="Liberação curricular">
-      <div className="flex flex-wrap items-start justify-between gap-5"><div className="max-w-2xl"><p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary"><BookCheck className="size-4" aria-hidden="true" />{scope.subject.name} · {scope.grade.name}</p><h2 className="mt-3 text-xl font-semibold">{ready ? "Conteúdo liberado para gerar provas" : reviewed ? "Revisão concluída. Pronto para liberar." : "Confira os itens antes de liberar"}</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{ready ? "A geração pode utilizar as habilidades e competências desta combinação. Os demais conteúdos mantêm sua própria revisão." : "Abra cada item, compare a descrição e os dados com as páginas do PDF oficial e registre sua decisão. A liberação exige todos os itens desta combinação aprovados."}</p></div>{ready ? <Button asChild><Link to="/"><Check className="size-4" />Criar prova</Link></Button> : <Button type="button" disabled={!reviewed || publish.isPending || environment.isDemo} onClick={() => publish.mutate()}>{publish.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />}Liberar matéria e ano</Button>}</div>
+      <div className="flex flex-wrap items-start justify-between gap-5"><div className="max-w-2xl"><p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary"><BookCheck className="size-4" aria-hidden="true" />{scope.subject.name} · {scope.grade.name}</p><h2 className="mt-3 text-xl font-semibold">{ready ? "Conteúdo liberado para gerar provas" : reviewed ? "Revisão concluída. Pronto para liberar." : canReview ? "Confira os itens antes de liberar" : "Conteúdo aguardando liberação"}</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{ready ? "A geração pode utilizar as habilidades e competências desta combinação. Os demais conteúdos mantêm sua própria revisão." : canReview ? "Abra cada item, compare a descrição e os dados com as páginas do PDF oficial e registre sua decisão. A liberação exige todos os itens desta combinação aprovados." : "Consulte as fontes e acompanhe o andamento. O administrador precisa concluir a revisão e a liberação antes de gerar provas deste conteúdo."}</p></div>{ready ? <Button asChild><Link to="/"><Check className="size-4" />Criar prova</Link></Button> : canReview && <Button type="button" disabled={!reviewed || publish.isPending || environment.isDemo} onClick={() => publish.mutate()}>{publish.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />}Liberar matéria e ano</Button>}</div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">{(["skills", "competencies"] as const).map((kind) => { const counts = scope.review[kind]; return <div key={kind} className="rounded-xl border border-border/70 bg-white/70 px-4 py-3"><p className="text-sm font-semibold">{counts.approved} de {counts.total} {kind === "skills" ? "habilidades aprovadas" : "competências aprovadas"}</p><p className="mt-1 text-xs text-muted-foreground">{counts.pending} pendentes · {counts.rejected} rejeitadas</p></div> })}</div>
       <p className="mt-4 text-xs leading-relaxed text-muted-foreground">As competências gerais e de área, e algumas habilidades, podem ser compartilhadas entre anos. Itens utilizados por uma liberação ficam protegidos para preservar as provas e os contextos já gerados.</p>
       {publish.isError && <p role="alert" className="mt-4 text-sm text-destructive">{getErrorMessage(publish.error)}</p>}

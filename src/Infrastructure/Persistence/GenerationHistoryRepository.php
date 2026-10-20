@@ -15,7 +15,8 @@ use Medoo\Medoo;
 
 final class GenerationHistoryRepository
 {
-    public function __construct(private readonly Medoo $database)
+    /** userId null is reserved for trusted CLI/maintenance callers, never an HTTP request. */
+    public function __construct(private readonly Medoo $database, private readonly ?int $userId = null)
     {
     }
 
@@ -23,10 +24,12 @@ final class GenerationHistoryRepository
     {
         $teacher = null;
         if ($request->teacherId !== null) {
-            $teacher = $this->database->get('teachers', ['id', 'name'], ['id' => $request->teacherId])
+            $teacher = $this->database->get('teachers', ['id', 'name'], ['id' => $request->teacherId,
+                ...($this->userId === null ? [] : ['user_id' => $this->userId])])
                 ?? throw new ExamGenerationException('invalid_input', 'O professor informado não está cadastrado.');
         }
         $this->database->insert('generation_history', [
+            'user_id' => $this->userId,
             'teacher_id' => $teacher['id'] ?? null, 'requester_name' => $teacher['name'] ?? null,
             'subject' => $request->bnccQuery->subject, 'grade' => $request->bnccQuery->grade,
             'question_count' => $request->questionCount,
@@ -89,7 +92,8 @@ final class GenerationHistoryRepository
         if ($exception instanceof AIProviderException) {
             $code = 'ai_' . $exception->reason->value;
             $message = $exception->getMessage();
-        } elseif ($exception instanceof ImportException || $exception instanceof ExamGenerationException) {
+        } elseif ($exception instanceof ImportException || $exception instanceof ExamGenerationException
+            || $exception instanceof \App\Application\Exams\GenerationLimitException) {
             $code = $exception->reason;
             $message = $exception->getMessage();
         }
@@ -106,6 +110,10 @@ final class GenerationHistoryRepository
         $limit = array_key_exists('limit', $query) ? self::positiveId($query['limit'], 100) : 20;
         $clauses = [];
         $bindings = [];
+        if ($this->userId !== null) {
+            $clauses[] = 'g.user_id = :owner';
+            $bindings[':owner'] = $this->userId;
+        }
         foreach (['before_id' => 'g.id < :before_id', 'teacher_id' => 'g.teacher_id = :teacher_id'] as $key => $clause) {
             if (array_key_exists($key, $query)) {
                 $bindings[':' . $key] = self::positiveId($query[$key]);
@@ -121,7 +129,7 @@ final class GenerationHistoryRepository
         }
         $where = $clauses === [] ? '' : ' WHERE ' . implode(' AND ', $clauses);
         // O limite é validado e os valores dos filtros são parâmetros. A listagem não lê prompts nem respostas.
-        $rows = $this->database->query('SELECT g.id, g.teacher_id, g.requester_name, g.status, g.stage,
+        $rows = $this->database->query('SELECT g.id, g.user_id, g.teacher_id, g.requester_name, g.status, g.stage,
             g.started_at, g.finished_at, g.subject, g.grade, g.question_count,
             JSON_EXTRACT(g.request_json, \'$.topics\') AS topics_json,
             g.provider, g.requested_model, g.model, g.bncc_document_id, g.bncc_revision,
@@ -138,7 +146,9 @@ final class GenerationHistoryRepository
     {
         // Uma leitura evita misturar um status antigo com uma prova confirmada entre duas consultas.
         $row = $this->database->query('SELECT g.*, e.id AS exam_id, e.exam_json FROM generation_history g
-            LEFT JOIN exams e ON e.generation_id = g.id WHERE g.id = :id', [':id' => $id])->fetch(\PDO::FETCH_ASSOC);
+            LEFT JOIN exams e ON e.generation_id = g.id WHERE g.id = :id'
+            . ($this->userId === null ? '' : ' AND g.user_id = :owner'),
+            [':id' => $id, ...($this->userId === null ? [] : [':owner' => $this->userId])])->fetch(\PDO::FETCH_ASSOC);
         if ($row === false) {
             throw new ImportException('not_found', 'Geração não encontrada.');
         }
@@ -163,16 +173,26 @@ final class GenerationHistoryRepository
     public function exam(int $id): array
     {
         // Não seleciona gabarito, pedido ou prompt na rota destinada à prova do aluno.
-        $row = $this->database->get('exams', ['id', 'generation_id', 'created_at', 'exam_json'], ['id' => $id])
-            ?? throw new ImportException('not_found', 'Prova não encontrada.');
+        $row = $this->database->query('SELECT e.id, e.generation_id, e.created_at, e.exam_json FROM exams e
+            INNER JOIN generation_history g ON g.id = e.generation_id WHERE e.id = :id'
+            . ($this->userId === null ? '' : ' AND g.user_id = :owner'),
+            [':id' => $id, ...($this->userId === null ? [] : [':owner' => $this->userId])])->fetch(\PDO::FETCH_ASSOC);
+        if ($row === false) {
+            throw new ImportException('not_found', 'Prova não encontrada.');
+        }
         return ['exam' => ['id' => $row['id'], ...json_decode($row['exam_json'], true, flags: JSON_THROW_ON_ERROR)],
             'generation_id' => $row['generation_id'], 'created_at' => $this->utc($row['created_at'])];
     }
 
     public function answerKey(int $id): array
     {
-        $json = $this->database->get('exam_answers', 'answer_key_json', ['exam_id' => $id])
-            ?? throw new ImportException('not_found', 'Gabarito não encontrado.');
+        $json = $this->database->query('SELECT a.answer_key_json FROM exam_answers a
+            INNER JOIN exams e ON e.id = a.exam_id INNER JOIN generation_history g ON g.id = e.generation_id
+            WHERE a.exam_id = :id' . ($this->userId === null ? '' : ' AND g.user_id = :owner'),
+            [':id' => $id, ...($this->userId === null ? [] : [':owner' => $this->userId])])->fetchColumn();
+        if ($json === false) {
+            throw new ImportException('not_found', 'Gabarito não encontrado.');
+        }
         return ['exam_id' => $id, 'answer_key' => json_decode($json, true, flags: JSON_THROW_ON_ERROR)];
     }
 
@@ -218,7 +238,8 @@ final class GenerationHistoryRepository
                 unset($row[$column]);
             }
         }
-        $row['requester_verified'] = false;
+        $row['requester_verified'] = ($row['user_id'] ?? null) !== null;
+        unset($row['user_id']);
         $row['started_at'] = $this->utc($row['started_at']);
         $row['finished_at'] = $row['finished_at'] === null ? null : $this->utc($row['finished_at']);
         return $row;

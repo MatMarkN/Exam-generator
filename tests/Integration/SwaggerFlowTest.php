@@ -13,6 +13,7 @@ use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tests\Support\BnccFixtures;
+use Tests\Support\AuthFixture;
 use Tests\Support\CurriculumFixture;
 use Tests\Support\GenerationHistoryFixture;
 use Tests\Support\OpenApiAssertions;
@@ -28,11 +29,13 @@ final class SwaggerFlowTest extends TestCase
     private App $app;
     private int $documentId;
     private int $competencyId;
+    private array $session;
 
     protected function setUp(): void
     {
         $connections = new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php');
         $this->database = $connections->create();
+        $this->session = (new AuthFixture($this->database))->create();
         $fixtures = new BnccFixtures($this->database);
         $this->documentId = $fixtures->document(['status' => 'ready', 'ready_at' => '2026-01-01 00:00:00',
             'structured_at' => '2026-01-01 00:00:00', 'structure_profile' => 'synthetic-swagger-test']);
@@ -55,6 +58,7 @@ final class SwaggerFlowTest extends TestCase
     {
         (new GenerationHistoryFixture($this->database))->removeForDocument($this->documentId);
         (new CurriculumFixture($this->database))->remove($this->documentId);
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testSwaggerExampleGeneratesAndRetrievesExamAnswersAndHistoryMatchingDocumentedSchemas(): void
@@ -112,7 +116,7 @@ final class SwaggerFlowTest extends TestCase
             $request->getBody()->write(json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
             $request->getBody()->rewind();
         }
-        $response = $this->app->handle($request);
+        $response = $this->app->handle((new AuthFixture($this->database))->authorize($request, $this->session));
         $body = (string) $response->getBody();
         self::assertSame($status, $response->getStatusCode(), $body);
         $value = json_decode($body, true, flags: JSON_THROW_ON_ERROR);

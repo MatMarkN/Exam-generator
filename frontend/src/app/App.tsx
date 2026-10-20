@@ -6,6 +6,9 @@ import ExamPage from "@/features/exams/ExamPage"
 import HistoryPage from "@/features/history/HistoryPage"
 import TeachersPage from "@/features/teachers/TeachersPage"
 import BnccPage from "@/features/bncc/BnccPage"
+import { AuthProvider } from "@/features/auth/AuthProvider"
+import AuthGate from "@/features/auth/AuthGate"
+import AuthPage from "@/features/auth/AuthPage"
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
@@ -17,12 +20,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
 }
 
 export default function App() {
-  return <ErrorBoundary><BrowserRouter><Routes><Route element={<AppShell />}>
+  return <ErrorBoundary><AuthProvider><BrowserRouter><Routes>
+    <Route path="entrar" element={<AuthPage key="login" mode="login" />} />
+    <Route path="cadastro" element={<AuthPage key="register" mode="register" />} />
+    <Route element={<AuthGate />}><Route element={<AppShell />}>
     <Route index element={<CreateExamPage />} />
     <Route path="provas" element={<HistoryPage />} />
     <Route path="provas/:id" element={<ExamPage />} />
     <Route path="professores" element={<TeachersPage />} />
     <Route path="bncc" element={<BnccPage />} />
     <Route path="*" element={<NotFoundPage />} />
-  </Route></Routes></BrowserRouter></ErrorBoundary>
+  </Route></Route></Routes></BrowserRouter></AuthProvider></ErrorBoundary>
 }

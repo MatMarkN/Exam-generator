@@ -14,6 +14,8 @@ final class ProcessRunner
      */
     public function run(array $command, float $timeoutSeconds, int $maxBytes): array
     {
+        // prlimit execs the child directly: native memory/CPU ceilings also apply outside PHP's memory_limit.
+        $command = ['/usr/bin/prlimit', '--as=268435456:268435456', '--cpu=60:60', '--nofile=128:128', '--', ...$command];
         // Array de argumentos: não há shell interpretando nomes de arquivos ou metacaracteres.
         $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes,
             null, ['PATH' => '/usr/local/bin:/usr/bin:/bin', 'LC_ALL' => 'C']);

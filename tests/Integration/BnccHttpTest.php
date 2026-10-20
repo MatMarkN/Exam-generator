@@ -11,6 +11,7 @@ use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\UploadedFile;
 use Tests\Support\PdfFixture;
+use Tests\Support\AuthFixture;
 
 final class BnccHttpTest extends TestCase
 {
@@ -18,11 +19,13 @@ final class BnccHttpTest extends TestCase
     private Medoo $database;
     private array $ids = [];
     private array $inputFiles = [];
+    private array $session;
 
     protected function setUp(): void
     {
         $this->app = require __DIR__ . '/../../config/bootstrap.php';
         $this->database = (new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php'))->create();
+        $this->session = (new AuthFixture($this->database))->create();
     }
 
     protected function tearDown(): void
@@ -38,6 +41,7 @@ final class BnccHttpTest extends TestCase
         foreach ($this->inputFiles as $path) {
             unlink($path);
         }
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testUploadMetadataPagesAndReprocessingThroughTheRegisteredRoutes(): void
@@ -49,7 +53,7 @@ final class BnccHttpTest extends TestCase
             ->withHeader('Content-Type', 'multipart/form-data; boundary=test')
             ->withParsedBody(['title' => 'SINTÉTICO HTTP', 'version_label' => 'teste'])
             ->withUploadedFiles(['pdf' => new UploadedFile($path, 'sample.pdf', 'application/pdf', filesize($path))]);
-        $response = $this->app->handle($request);
+        $response = $this->send($request);
         $document = json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);
         if (isset($document['id'])) {
             $this->ids[] = $document['id'];
@@ -59,15 +63,15 @@ final class BnccHttpTest extends TestCase
         self::assertSame('draft', $document['status']);
         self::assertSame('/bncc/documents/' . $document['id'], $response->getHeaderLine('Location'));
 
-        $pages = $this->app->handle((new ServerRequestFactory())->createServerRequest('GET', '/bncc/documents/' . $document['id'] . '/pages'));
+        $pages = $this->send((new ServerRequestFactory())->createServerRequest('GET', '/bncc/documents/' . $document['id'] . '/pages'));
         self::assertSame(200, $pages->getStatusCode());
         $body = json_decode((string) $pages->getBody(), true, flags: JSON_THROW_ON_ERROR);
         self::assertSame(['EF06MA07'], $body['pages'][0]['detected_skill_codes']);
 
-        $duplicate = $this->app->handle($request);
+        $duplicate = $this->send($request);
         self::assertSame(409, $duplicate->getStatusCode());
 
-        $reprocessed = $this->app->handle((new ServerRequestFactory())->createServerRequest('POST', '/bncc/documents/' . $document['id'] . '/reprocess'));
+        $reprocessed = $this->send((new ServerRequestFactory())->createServerRequest('POST', '/bncc/documents/' . $document['id'] . '/reprocess'));
         $new = json_decode((string) $reprocessed->getBody(), true, flags: JSON_THROW_ON_ERROR);
         if (isset($new['id'])) {
             $this->ids[] = $new['id'];
@@ -90,10 +94,52 @@ final class BnccHttpTest extends TestCase
             [$factory->createServerRequest('GET', '/storage/bncc/document.pdf'), 404],
         ];
         foreach ($cases as [$request, $expected]) {
-            $response = $this->app->handle($request);
+            $response = $this->send($request);
             self::assertSame($expected, $response->getStatusCode());
             self::assertStringContainsString('application/json', $response->getHeaderLine('Content-Type'));
             self::assertIsArray(json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR));
         }
+    }
+
+    public function testOnlyAnAuthenticatedAdministratorCanImportTheRulesPdf(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'bncc-auth-');
+        $this->inputFiles[] = $path;
+        file_put_contents($path, PdfFixture::bytes(['Origem SINTÉTICA para testar autorização.']));
+        $request = (new ServerRequestFactory())->createServerRequest('POST', '/bncc/documents')
+            ->withHeader('Host', 'localhost')->withHeader('Content-Type', 'multipart/form-data; boundary=test')
+            ->withParsedBody(['title' => 'SINTÉTICO', 'version_label' => 'teste'])
+            ->withUploadedFiles(['pdf' => new UploadedFile($path, 'sample.pdf', 'application/pdf', filesize($path))]);
+        $before = $this->database->count('bncc_documents');
+        self::assertSame(401, $this->app->handle($request)->getStatusCode());
+        $teacher = (new AuthFixture($this->database))->create('teacher');
+        try {
+            $response = $this->app->handle((new AuthFixture($this->database))->authorize($request, $teacher));
+            self::assertSame(403, $response->getStatusCode());
+            self::assertSame($before, $this->database->count('bncc_documents'));
+        } finally {
+            (new AuthFixture($this->database))->remove($teacher);
+        }
+    }
+
+    public function testAnAdministratorCannotSendTwoPdfFilesInOneRequest(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'bncc-one-');
+        $this->inputFiles[] = $path;
+        file_put_contents($path, PdfFixture::bytes(['Origem SINTÉTICA para testar apenas um PDF.']));
+        $request = (new ServerRequestFactory())->createServerRequest('POST', '/bncc/documents')
+            ->withHeader('Content-Type', 'multipart/form-data; boundary=test')
+            ->withParsedBody(['title' => 'SINTÉTICO', 'version_label' => 'teste'])
+            ->withUploadedFiles(['pdf' => new UploadedFile($path, 'first.pdf', 'application/pdf', filesize($path)),
+                'second_pdf' => new UploadedFile($path, 'second.pdf', 'application/pdf', filesize($path))]);
+        $before = $this->database->count('bncc_documents');
+        $response = $this->send($request);
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame($before, $this->database->count('bncc_documents'));
+    }
+
+    private function send(\Psr\Http\Message\ServerRequestInterface $request): \Psr\Http\Message\ResponseInterface
+    {
+        return $this->app->handle((new AuthFixture($this->database))->authorize($request, $this->session));
     }
 }

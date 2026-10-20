@@ -15,6 +15,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tests\Support\BnccFixtures;
+use Tests\Support\AuthFixture;
 use Tests\Support\CurriculumFixture;
 
 final class BnccContextTest extends TestCase
@@ -23,10 +24,12 @@ final class BnccContextTest extends TestCase
     private BnccFixtures $fixtures;
     private BnccContextService $service;
     private array $documents = [];
+    private array $session;
 
     protected function setUp(): void
     {
         $this->database = (new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php'))->create();
+        $this->session = (new AuthFixture($this->database))->create();
         $this->fixtures = new BnccFixtures($this->database);
         $this->service = new BnccContextService(new BnccContextRepository($this->database), new BnccTopicMatcher());
     }
@@ -36,6 +39,7 @@ final class BnccContextTest extends TestCase
         foreach ($this->documents as $id) {
             (new CurriculumFixture($this->database))->remove($id);
         }
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testSixthGradeFractionsKeepsGradeSubjectSourceAndApplicableCompetencyScopes(): void
@@ -276,6 +280,7 @@ final class BnccContextTest extends TestCase
         $request = (new ServerRequestFactory())->createServerRequest('POST', '/bncc/context')->withHeader('Content-Type', $media);
         $request->getBody()->write($body);
         $request->getBody()->rewind();
+        $request = (new AuthFixture($this->database))->authorize($request, $this->session);
         return $app->handle($request);
     }
 }

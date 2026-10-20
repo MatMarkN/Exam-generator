@@ -22,6 +22,7 @@ use PHPUnit\Framework\TestCase;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tests\Support\BnccFixtures;
+use Tests\Support\AuthFixture;
 use Tests\Support\CurriculumFixture;
 use Tests\Support\ExamFixture;
 
@@ -37,11 +38,13 @@ final class ExamBnccValidationTest extends TestCase
     private int $skillId;
     private int $sourceId;
     private int $competencyId;
+    private array $session;
 
     protected function setUp(): void
     {
         $this->connections = new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php');
         $this->database = $this->connections->create();
+        $this->session = (new AuthFixture($this->database))->create();
         $this->concurrent = $this->connections->create();
         $this->fixtures = new BnccFixtures($this->database);
         $this->bncc = new BnccContextService(new BnccContextRepository($this->database), new BnccTopicMatcher());
@@ -58,6 +61,7 @@ final class ExamBnccValidationTest extends TestCase
             (new \Tests\Support\GenerationHistoryFixture($this->database))->removeForDocument($id);
             (new CurriculumFixture($this->database))->remove($id);
         }
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testReportUsesDatabaseIdsAndProvenanceAndDoesNotWriteOrCallTheProviderAgain(): void
@@ -222,7 +226,7 @@ final class ExamBnccValidationTest extends TestCase
         $request = (new ServerRequestFactory())->createServerRequest('POST', '/exams/generate')->withHeader('Content-Type', 'application/json');
         $request->getBody()->write(json_encode($this->input()));
         $request->getBody()->rewind();
-        $response = $app->handle($request);
+        $response = $app->handle((new AuthFixture($this->database))->authorize($request, $this->session));
         self::assertSame(409, $response->getStatusCode());
         $body = json_decode((string) $response->getBody(), true);
         self::assertSame('curriculum_changed', $body['error']['code']);

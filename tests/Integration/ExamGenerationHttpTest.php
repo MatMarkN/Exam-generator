@@ -14,6 +14,7 @@ use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tests\Support\BnccFixtures;
+use Tests\Support\AuthFixture;
 use Tests\Support\CurriculumFixture;
 use Tests\Support\ExamFixture;
 use Tests\Support\StubHttpTransport;
@@ -24,11 +25,13 @@ final class ExamGenerationHttpTest extends TestCase
     private int $documentId;
     private StubHttpTransport $http;
     private App $app;
+    private array $session;
 
     protected function setUp(): void
     {
         $connections = new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php');
         $this->database = $connections->create();
+        $this->session = (new AuthFixture($this->database))->create();
         $fixtures = new BnccFixtures($this->database);
         $this->documentId = $fixtures->document(['status' => 'ready', 'ready_at' => '2026-01-01 00:00:00',
             'structured_at' => '2026-01-01 00:00:00', 'structure_profile' => 'synthetic-gemini-fixture']);
@@ -54,6 +57,7 @@ final class ExamGenerationHttpTest extends TestCase
     {
         (new \Tests\Support\GenerationHistoryFixture($this->database))->removeForDocument($this->documentId);
         (new CurriculumFixture($this->database))->remove($this->documentId);
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testRegisteredRouteUsesRealAdapterAndValidatesStudentExamAndSeparateAnswerKey(): void
@@ -147,7 +151,7 @@ final class ExamGenerationHttpTest extends TestCase
         // O Compose de testes não recebe GEMINI_API_KEY, mesmo que o .env local esteja preenchido.
         self::assertSame('', getenv('GEMINI_API_KEY') ?: '');
         $this->app = require __DIR__ . '/../../config/bootstrap.php';
-        $health = $this->app->handle((new ServerRequestFactory())->createServerRequest('GET', '/health'));
+        $health = $this->app->handle((new ServerRequestFactory())->createServerRequest('GET', '/health')->withHeader('Host', 'localhost'));
         self::assertSame(200, $health->getStatusCode());
         $response = $this->post();
         self::assertSame(503, $response->getStatusCode());
@@ -157,9 +161,11 @@ final class ExamGenerationHttpTest extends TestCase
 
     private function post(?string $body = null, string $contentType = 'application/json'): \Psr\Http\Message\ResponseInterface
     {
+        // Estes casos verificam o contrato HTTP/fornecedor; os intervalos são testados em GenerationQuotaTest.
+        $this->database->update('generation_quota_users', ['last_admitted_at' => null], ['user_id' => $this->session['user']->id]);
         $request = (new ServerRequestFactory())->createServerRequest('POST', '/exams/generate')->withHeader('Content-Type', $contentType);
         $request->getBody()->write($body ?? json_encode(ExamFixture::input(['bncc_document_id' => $this->documentId])));
         $request->getBody()->rewind();
-        return $this->app->handle($request);
+        return $this->app->handle((new AuthFixture($this->database))->authorize($request, $this->session));
     }
 }

@@ -7,6 +7,9 @@ import { api } from "@/lib/api/client"
 import type { BnccCompetency, BnccDocument, BnccRelease, BnccSkill, BnccSkillDetail } from "@/lib/api/types"
 import BnccPage from "./BnccPage"
 
+const authState = vi.hoisted(() => ({ user: { id: 1, name: "Administrador", email: "admin@example.test", role: "admin" as "admin" | "teacher" } }))
+vi.mock("@/features/auth/AuthProvider", () => ({ useAuth: () => authState }))
+
 vi.mock("@/lib/environment", () => ({ environment: { isDemo: false, label: "Ambiente local", apiBase: "/api" } }))
 vi.mock("@/lib/api/client", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/api/client")>(),
@@ -22,6 +25,7 @@ function release(approved = false, ready = false): BnccRelease {
   return { subject, grade, status: ready ? "ready" : "pending", released_at: ready ? "2026-10-20 12:00:00" : null, review: { skills: { pending: approved ? 0 : 1, approved: approved ? 1 : 0, rejected: 0, total: 1 }, competencies: { pending: 0, approved: 1, rejected: 0, total: 1 } } }
 }
 beforeEach(() => {
+  authState.user.role = "admin"
   vi.clearAllMocks()
   vi.mocked(api.subjects).mockResolvedValue([subject, { id: 7, code: "historia", name: "História" }])
   vi.mocked(api.grades).mockResolvedValue([{ ...grade, code: "ef_06" }, { ...grade, id: 7, year_number: 7, code: "ef_07", name: "7º ano" }])
@@ -39,6 +43,18 @@ function renderPage() {
 }
 
 describe("revisão explícita da BNCC", () => {
+  it("permite ao professor consultar as fontes sem oferecer aprovação ou liberação", async () => {
+    authState.user.role = "teacher"
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: /EF06MA07/ }))
+    expect(await screen.findByText("Texto de origem da habilidade para conferência.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Liberar matéria e ano" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Aprovar item" })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Nota da revisão")).not.toBeInTheDocument()
+    expect(api.reviewBnccSkill).not.toHaveBeenCalled()
+    expect(api.publishBnccScope).not.toHaveBeenCalled()
+  })
   it("mantém a liberação bloqueada com itens pendentes e não aprova nada ao carregar", async () => {
     renderPage()
     expect(await screen.findByRole("button", { name: "Liberar matéria e ano" })).toBeDisabled()

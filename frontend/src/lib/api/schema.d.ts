@@ -1,5 +1,85 @@
 // Gerado pelo contrato OpenAPI do backend. Execute npm run api:types para atualizar.
 export interface paths {
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Criar uma conta
+         * @description Cadastra uma conta de professor, inicia uma sessão de 12 horas e envia cookie HttpOnly/SameSite Strict. Senha de 12 a 128 caracteres, até 512 bytes. Não aceita papel administrativo no JSON. Limite de cinco cadastros por IP a cada hora. Corpo máximo: 8 KiB.
+         */
+        post: operations["registerUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Entrar na conta
+         * @description Valida as credenciais na API e substitui a sessão atual por um novo cookie aleatório. E-mail ou senha incorretos devolvem uma mensagem genérica. Até 10 tentativas por e-mail e 60 por IP em 15 minutos. O IP é o observado pelo servidor; atrás de proxy ele pode ser compartilhado. Corpo máximo: 8 KiB.
+         */
+        post: operations["loginUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Validar a sessão atual
+         * @description Retorna o usuário autenticado e o token CSRF. O cookie de autenticação nunca aparece no JSON. Envie X-CSRF-Token em todas as operações de escrita. O Swagger busca esse token automaticamente antes de enviar alterações.
+         */
+        get: operations["getAuthSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Encerrar a sessão
+         * @description Revoga a sessão no servidor e expira o cookie atual. Exige sessão e X-CSRF-Token.
+         */
+        post: operations["logoutUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teachers": {
         parameters: {
             query?: never;
@@ -15,7 +95,7 @@ export interface paths {
         put?: never;
         /**
          * Cadastrar um professor
-         * @description Cria o professor e suas preferências padrão juntos: escola em branco, Arial, tamanho 12. Copie o id retornado para as próximas operações. Não há autenticação. Corpo máximo: 64 KiB. O e-mail é opcional e único; use null ou omita quando não precisar cadastrá-lo.
+         * @description Cria o professor e suas preferências padrão juntos: escola em branco, Arial, tamanho 12. Copie o id retornado para as próximas operações. A sessão define o proprietário. Corpo máximo: 64 KiB. O e-mail é opcional e único; use null ou omita quando não precisar cadastrá-lo.
          */
         post: operations["createTeacher"];
         delete?: never;
@@ -201,7 +281,7 @@ export interface paths {
         };
         /**
          * Inspecionar uma tentativa
-         * @description Use generation.id (não confundir com exam.id). Inclui pedido, prompt, contexto, resultado ou erro. teacher_id é declarado, não autenticado. Uma interrupção pode deixar status running.
+         * @description Use generation.id (não confundir com exam.id). Inclui pedido, prompt, contexto, resultado ou erro. Somente o proprietário autenticado tem acesso. Uma interrupção pode deixar status running.
          */
         get: operations["getGeneration"];
         put?: never;
@@ -247,7 +327,7 @@ export interface paths {
         put?: never;
         /**
          * Importar PDF e extrair páginas
-         * @description **Grava dados.** Selecione o arquivo no campo pdf. Não preencha manualmente o Content-Type: o navegador cria o boundary. Salva uma revisão draft; extrair páginas não aprova o currículo. Um mesmo PDF já importado retorna 409. A demonstração começa com currículo sintético e não contém o PDF oficial.
+         * @description **Grava dados.** Selecione o arquivo no campo pdf. Não preencha manualmente o Content-Type: o navegador cria o boundary. Salva uma revisão draft; extrair páginas não aprova o currículo. Um mesmo PDF já importado retorna 409. A demonstração começa com currículo sintético e não contém o PDF oficial. **Somente administrador autenticado.**
          */
         post: operations["importDocument"];
         delete?: never;
@@ -307,7 +387,7 @@ export interface paths {
         put?: never;
         /**
          * Reprocessar em nova revisão
-         * @description **Grava dados.** Reutiliza o PDF salvo e cria outra revisão draft. A revisão anterior permanece. Sem corpo. Não se aplica ao currículo demo, que não possui PDF.
+         * @description **Grava dados.** Reutiliza o PDF salvo e cria outra revisão draft. A revisão anterior permanece. Sem corpo. Não se aplica ao currículo demo, que não possui PDF. **Somente administrador autenticado.**
          */
         post: operations["reprocessDocument"];
         delete?: never;
@@ -331,7 +411,7 @@ export interface paths {
         put?: never;
         /**
          * Estruturar habilidades e competências
-         * @description **Grava dados.** Interpreta o perfil BNCC 2018 EI/EF em uma revisão draft ainda não estruturada. Os itens entram pendentes de revisão. Não libera automaticamente o documento. Sem corpo.
+         * @description **Grava dados.** Interpreta o perfil BNCC 2018 EI/EF em uma revisão draft ainda não estruturada. Os itens entram pendentes de revisão. Não libera automaticamente o documento. Sem corpo. **Somente administrador autenticado.**
          */
         post: operations["structureDocument"];
         delete?: never;
@@ -415,7 +495,7 @@ export interface paths {
         head?: never;
         /**
          * Registrar revisão de habilidade
-         * @description **Altera o item no banco.** Use approved somente após conferir a fonte. note é obrigatório; description opcional permite apenas recompor espaços/hífens. Revisões ready e itens já usados em uma liberação parcial são imutáveis (409). Outros itens de um documento draft continuam editáveis. O currículo demo já está ready. Corpo máximo: 8 KiB.
+         * @description **Altera o item no banco.** Use approved somente após conferir a fonte. note é obrigatório; description opcional permite apenas recompor espaços/hífens. Revisões ready e itens já usados em uma liberação parcial são imutáveis (409). Outros itens de um documento draft continuam editáveis. O currículo demo já está ready. Corpo máximo: 8 KiB. **Somente administrador autenticado.**
          */
         patch: operations["reviewSkill"];
         trace?: never;
@@ -435,7 +515,7 @@ export interface paths {
         head?: never;
         /**
          * Registrar revisão de competência
-         * @description **Altera o item no banco.** Use approved somente após conferir a fonte. note é obrigatório; description opcional permite apenas recompor espaços/hífens. Revisões ready e itens já usados em uma liberação parcial são imutáveis (409). Outros itens de um documento draft continuam editáveis. O currículo demo já está ready. Corpo máximo: 8 KiB.
+         * @description **Altera o item no banco.** Use approved somente após conferir a fonte. note é obrigatório; description opcional permite apenas recompor espaços/hífens. Revisões ready e itens já usados em uma liberação parcial são imutáveis (409). Outros itens de um documento draft continuam editáveis. O currículo demo já está ready. Corpo máximo: 8 KiB. **Somente administrador autenticado.**
          */
         patch: operations["reviewCompetency"];
         trace?: never;
@@ -455,7 +535,7 @@ export interface paths {
         put?: never;
         /**
          * Liberar uma matéria e um ano revisados
-         * @description **Grava a liberação do par informado.** Exige todas as habilidades da matéria/ano e todas as competências aplicáveis aprovadas e com origens válidas. Os demais pares podem continuar pendentes. O documento permanece draft, e os itens usados por esta liberação ficam imutáveis. Esta operação não aprova itens automaticamente nem substitui sua conferência com o PDF. Corpo máximo: 8 KiB.
+         * @description **Grava a liberação do par informado.** Exige todas as habilidades da matéria/ano e todas as competências aplicáveis aprovadas e com origens válidas. Os demais pares podem continuar pendentes. O documento permanece draft, e os itens usados por esta liberação ficam imutáveis. Esta operação não aprova itens automaticamente nem substitui sua conferência com o PDF. Corpo máximo: 8 KiB. **Somente administrador autenticado.**
          */
         post: operations["publishCurriculumScope"];
         delete?: never;
@@ -475,7 +555,7 @@ export interface paths {
         put?: never;
         /**
          * Liberar uma revisão aprovada
-         * @description **Altera draft para ready.** Exige o perfil oficial, todas as 1304 habilidades e 94 competências aprovadas e origens completas. Sem corpo. Um documento ready não pode mais ser editado. Esta operação não substitui a revisão pedagógica.
+         * @description **Altera draft para ready.** Exige o perfil oficial, todas as 1304 habilidades e 94 competências aprovadas e origens completas. Sem corpo. Um documento ready não pode mais ser editado. Esta operação não substitui a revisão pedagógica. **Somente administrador autenticado.**
          */
         post: operations["publishDocument"];
         delete?: never;
@@ -1277,8 +1357,7 @@ export interface components {
             id: number;
             teacher_id: number | null;
             requester_name: string | null;
-            /** @constant */
-            requester_verified: false;
+            requester_verified: boolean;
             /** @enum {string} */
             status: "running" | "succeeded" | "failed";
             stage: string;
@@ -1311,8 +1390,7 @@ export interface components {
             id: number;
             teacher_id: number | null;
             requester_name: string | null;
-            /** @constant */
-            requester_verified: false;
+            requester_verified: boolean;
             /** @enum {string} */
             status: "running" | "succeeded" | "failed";
             stage: string;
@@ -1412,6 +1490,34 @@ export interface components {
                 answer_key: components["schemas"]["AnswerKey"];
             } | string | null;
         };
+        AuthUser: {
+            id: number;
+            name: string;
+            /** Format: email */
+            email: string;
+            /** @enum {string} */
+            role: "teacher" | "admin";
+        };
+        AuthSession: {
+            user: components["schemas"]["AuthUser"];
+            csrf_token: string;
+        };
+        AuthLogin: {
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        AuthRegister: {
+            name: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            password_confirmation: string;
+        };
+        AuthLogout: {
+            /** @constant */
+            success: true;
+        };
     };
     responses: never;
     parameters: never;
@@ -1421,6 +1527,324 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    registerUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthRegister"];
+            };
+        };
+        responses: {
+            /** @description Registro criado. */
+            201: {
+                headers: {
+                    /** @description Caminho do registro criado neste ambiente. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description Origem, Host, CSRF ou permissão incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflito, e-mail já cadastrado ou currículo ainda não liberado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Envio maior que o limite. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Content-Type incompatível. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Entrada inválida, tópico sem correspondência ou recusa do provedor. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Limite de acesso, geração ou fornecedor atingido. */
+            429: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Falha interna controlada. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Banco/provedor indisponível ou IA sem configuração. */
+            503: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    loginUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthLogin"];
+            };
+        };
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description Credenciais ou sessão inválidas. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Origem, Host, CSRF ou permissão incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Envio maior que o limite. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Content-Type incompatível. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Entrada inválida, tópico sem correspondência ou recusa do provedor. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Limite de acesso, geração ou fornecedor atingido. */
+            429: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Falha interna controlada. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Banco/provedor indisponível ou IA sem configuração. */
+            503: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAuthSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Falha interna controlada. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Banco/provedor indisponível ou IA sem configuração. */
+            503: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    logoutUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLogout"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Falha interna controlada. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Banco/provedor indisponível ou IA sem configuração. */
+            503: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listTeachers: {
         parameters: {
             query?: {
@@ -1440,6 +1864,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeacherList"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Entrada inválida, tópico sem correspondência ou recusa do provedor. */
@@ -1495,6 +1937,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Teacher"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Conflito, e-mail já cadastrado ou currículo ainda não liberado. */
@@ -1579,6 +2039,24 @@ export interface operations {
                     "application/json": components["schemas"]["Teacher"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -1645,6 +2123,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Teacher"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -1738,6 +2234,24 @@ export interface operations {
                     "application/json": components["schemas"]["TeacherSettings"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -1804,6 +2318,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeacherSettings"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -1882,6 +2414,24 @@ export interface operations {
                     "application/json": components["schemas"]["SubjectList"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Entrada inválida, tópico sem correspondência ou recusa do provedor. */
             422: {
                 headers: {
@@ -1929,6 +2479,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchoolGradeList"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Entrada inválida, tópico sem correspondência ou recusa do provedor. */
@@ -1984,6 +2552,24 @@ export interface operations {
                     "application/json": components["schemas"]["GenerationResult"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -2029,7 +2615,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Limite do provedor atingido. */
+            /** @description Limite de acesso, geração ou fornecedor atingido. */
             429: {
                 headers: {
                     /** @description Segundos, quando informados pelo provedor. */
@@ -2104,6 +2690,24 @@ export interface operations {
                     "application/json": components["schemas"]["ExamLookup"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -2166,6 +2770,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnswerKeyLookup"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -2231,6 +2853,24 @@ export interface operations {
                     "application/json": components["schemas"]["GenerationList"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Entrada inválida, tópico sem correspondência ou recusa do provedor. */
             422: {
                 headers: {
@@ -2284,6 +2924,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerationDetail"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -2346,6 +3004,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BnccContext"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -2424,6 +3100,24 @@ export interface operations {
                     "application/json": components["schemas"]["BnccDocumentList"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Falha interna controlada. */
             500: {
                 headers: {
@@ -2478,6 +3172,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Document"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Conflito, e-mail já cadastrado ou currículo ainda não liberado. */
@@ -2571,6 +3283,24 @@ export interface operations {
                     "application/json": components["schemas"]["Document"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -2638,6 +3368,24 @@ export interface operations {
                     "application/json": components["schemas"]["Pages"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -2702,6 +3450,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Document"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -2786,6 +3552,24 @@ export interface operations {
                     "application/json": components["schemas"]["Structure"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -2848,6 +3632,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Structure"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -2936,6 +3738,24 @@ export interface operations {
                     "application/json": components["schemas"]["Skills"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -3003,6 +3823,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Skill"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -3080,6 +3918,24 @@ export interface operations {
                     "application/json": components["schemas"]["Competencies"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -3151,6 +4007,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewResult"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -3253,6 +4127,24 @@ export interface operations {
                     "application/json": components["schemas"]["ReviewResult"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -3344,6 +4236,24 @@ export interface operations {
                     "application/json": components["schemas"]["BnccReleaseList"];
                 };
             };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Registro não encontrado neste ambiente. */
             404: {
                 headers: {
@@ -3410,6 +4320,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BnccRelease"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */
@@ -3501,6 +4429,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublishedDocument"];
+                };
+            };
+            /** @description Sessão ausente ou expirada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CSRF, origem, Host ou papel administrativo incompatíveis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Registro não encontrado neste ambiente. */

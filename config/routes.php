@@ -16,8 +16,17 @@ use App\Application\Exams\GenerationCostEstimator;
 use App\Application\AI\AIProviderInterface;
 use App\Infrastructure\Persistence\DatabaseConnectionFactory;
 use Slim\App;
+use App\Http\Actions\AuthAction;
+use App\Http\Middleware\SecurityMiddleware;
 
 return static function (App $app, DatabaseConnectionFactory $connections, ?AIProviderInterface $provider = null): void {
+    $security = require __DIR__ . '/security.php';
+    $app->add(new SecurityMiddleware($connections, $security, $app->getResponseFactory()));
+    $auth = new AuthAction($connections, $security);
+    $app->post('/auth/register', [$auth, 'register']);
+    $app->post('/auth/login', [$auth, 'login']);
+    $app->get('/auth/session', [$auth, 'session']);
+    $app->post('/auth/logout', [$auth, 'logout']);
     $docs = new ApiDocsAction(getenv('APP_ENV') === 'demo');
     $app->get('/docs', [$docs, 'ui']);
     $app->get('/docs/', [$docs, 'ui']);

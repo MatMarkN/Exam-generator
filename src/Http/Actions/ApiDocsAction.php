@@ -47,6 +47,7 @@ final class ApiDocsAction
                   <h1>Experimente a API</h1>
                   <p>{$instructions}</p>
                   <ol>
+                    <li>Em <strong>Autenticação</strong>, cadastre uma conta ou faça login. A API envia um cookie HttpOnly; o Swagger busca o token CSRF automaticamente nas alterações. Importação, revisão e liberação curricular exigem papel administrativo.</li>
                     <li>Em <strong>Professores → POST /teachers</strong>, clique em <strong>Try it out</strong>, preencha o nome e execute. Copie o <strong>id</strong> retornado.</li>
                     <li>Use esse id em <strong>PATCH /teachers/{id}/settings</strong> para salvar escola e fonte. Em <strong>Catálogos</strong>, consulte matérias e anos escolares.</li>
                     <li>Em <strong>Provas → POST /exams/generate</strong>, clique em <strong>Try it out</strong>. Acrescente <strong>teacher_id</strong> com o id copiado para associar o professor. A geração também aceita pedidos sem professor cadastrado.</li>

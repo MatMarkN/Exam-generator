@@ -12,6 +12,7 @@ use Medoo\Medoo;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tests\Support\CurriculumFixture;
+use Tests\Support\AuthFixture;
 
 final class BnccCurriculumTest extends TestCase
 {
@@ -19,10 +20,12 @@ final class BnccCurriculumTest extends TestCase
     private CurriculumFixture $fixtures;
     private BnccCurriculumRepository $repository;
     private array $documents = [];
+    private array $session;
 
     protected function setUp(): void
     {
         $this->database = (new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php'))->create();
+        $this->session = (new AuthFixture($this->database))->create();
         $this->fixtures = new CurriculumFixture($this->database);
         $this->repository = new BnccCurriculumRepository($this->database);
     }
@@ -32,6 +35,7 @@ final class BnccCurriculumTest extends TestCase
         foreach ($this->documents as $document) {
             $this->fixtures->remove($document['id']);
         }
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testStructurePreservesTheOriginalAndCreatesPendingItemsWithGradesAndProvenance(): void
@@ -157,18 +161,18 @@ final class BnccCurriculumTest extends TestCase
         $factory = new ServerRequestFactory();
         $prefix = '/bncc/documents/' . $document['id'];
         foreach (['/structure', '/skills?limit=1', '/skills/EF15AR01', '/competencies'] as $suffix) {
-            $response = $app->handle($factory->createServerRequest('GET', $prefix . $suffix));
+            $response = $app->handle($this->authorize($factory->createServerRequest('GET', $prefix . $suffix)));
             self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
         }
         $request = $factory->createServerRequest('PATCH', $prefix . '/skills/EF15AR01/review')->withHeader('Content-Type', 'application/json');
         $request->getBody()->write(json_encode(['status' => 'rejected', 'note' => 'Revisão SINTÉTICA requer ajuste.']));
         $request->getBody()->rewind();
-        self::assertSame(200, $app->handle($request)->getStatusCode());
+        self::assertSame(200, $app->handle($this->authorize($request))->getStatusCode());
         self::assertSame('rejected', $this->repository->skill($document['id'], 'EF15AR01')['review_status']);
-        self::assertSame(409, $app->handle($factory->createServerRequest('POST', $prefix . '/publish'))->getStatusCode());
+        self::assertSame(409, $app->handle($this->authorize($factory->createServerRequest('POST', $prefix . '/publish')))->getStatusCode());
         $bad = $factory->createServerRequest('PATCH', $prefix . '/skills/EF15AR01/review')->withHeader('Content-Type', 'application/json');
         $bad->getBody()->write('{invalid'); $bad->getBody()->rewind();
-        self::assertSame(422, $app->handle($bad)->getStatusCode());
+        self::assertSame(422, $app->handle($this->authorize($bad))->getStatusCode());
         self::assertSame('draft', $this->repository->overview($document['id'])['status']);
     }
 
@@ -176,7 +180,7 @@ final class BnccCurriculumTest extends TestCase
     {
         $document = $this->document();
         $app = require __DIR__ . '/../../config/bootstrap.php';
-        $response = $app->handle((new ServerRequestFactory())->createServerRequest('POST', '/bncc/documents/' . $document['id'] . '/structure'));
+        $response = $app->handle($this->authorize((new ServerRequestFactory())->createServerRequest('POST', '/bncc/documents/' . $document['id'] . '/structure')));
         self::assertSame(422, $response->getStatusCode());
         self::assertSame('unsupported_document', json_decode((string) $response->getBody(), true)['error']['code']);
         self::assertSame(0, $this->database->count('bncc_sections', ['document_id' => $document['id']]));
@@ -187,6 +191,11 @@ final class BnccCurriculumTest extends TestCase
         $document = $this->fixtures->document();
         $this->documents[] = $document;
         return $document;
+    }
+
+    private function authorize(\Psr\Http\Message\ServerRequestInterface $request): \Psr\Http\Message\ServerRequestInterface
+    {
+        return (new AuthFixture($this->database))->authorize($request, $this->session);
     }
 
     private function save(array $document, bool $full = false): array

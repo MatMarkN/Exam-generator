@@ -13,6 +13,7 @@ use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tests\Support\OpenApiAssertions;
+use Tests\Support\AuthFixture;
 
 final class TeacherHttpTest extends TestCase
 {
@@ -21,11 +22,13 @@ final class TeacherHttpTest extends TestCase
     private Medoo $database;
     private App $app;
     private array $ids = [];
+    private array $session;
 
     protected function setUp(): void
     {
         $connections = new DatabaseConnectionFactory(require __DIR__ . '/../../config/database.php');
         $this->database = $connections->create();
+        $this->session = (new AuthFixture($this->database))->create();
         $this->app = AppFactory::create();
         (require __DIR__ . '/../../config/routes.php')($this->app, $connections);
         $this->app->addRoutingMiddleware();
@@ -36,6 +39,7 @@ final class TeacherHttpTest extends TestCase
         if ($this->ids !== []) {
             $this->database->delete('teachers', ['id' => $this->ids]);
         }
+        (new AuthFixture($this->database))->remove($this->session);
     }
 
     public function testCreateReadEditPreferencesAndClearNullableFields(): void
@@ -88,7 +92,7 @@ final class TeacherHttpTest extends TestCase
 
     public function testLegacyTeacherGetsDefaultsWithoutWritingAndPatchCreatesSettings(): void
     {
-        $this->database->insert('teachers', ['name' => 'Legado']);
+        $this->database->insert('teachers', ['name' => 'Legado', 'user_id' => $this->session['user']->id]);
         $id = (int) $this->database->id();
         $this->ids[] = $id;
         self::assertSame(['school_name' => null, 'default_font_family' => 'Arial', 'default_font_size' => 12],
@@ -170,7 +174,7 @@ final class TeacherHttpTest extends TestCase
             $request->getBody()->write($raw ?? json_encode($body, JSON_THROW_ON_ERROR));
             $request->getBody()->rewind();
         }
-        $response = $this->app->handle($request);
+        $response = $this->app->handle((new AuthFixture($this->database))->authorize($request, $this->session));
         if ($method === 'POST' && $path === '/teachers' && $response->getStatusCode() === 201) {
             $this->ids[] = $this->data($response)['id'];
         }
