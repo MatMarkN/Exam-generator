@@ -52,9 +52,10 @@ O banco demo é temporário: seus cadastros e provas são descartados quando o M
 - Leitura de provas e consulta do gabarito em telas separadas.
 - Histórico paginado de sucessos, falhas e tentativas em andamento.
 - Importação de PDF curricular, extração por página, estruturação e revisão da BNCC pela API.
+- Tela de revisão da BNCC e liberação por matéria e ano escolar, com proteção dos itens já publicados.
 - Contexto curricular selecionado por matéria, ano e tópicos.
 - Validação estrutural da resposta e conferência das referências curriculares.
-- Swagger UI local com as **28 operações da API** documentadas.
+- Swagger UI local com as **31 operações da API** documentadas.
 
 ## Tecnologias
 
@@ -117,7 +118,7 @@ docs/screenshots/        imagens da interface
 
 ## Testes e build
 
-Na última verificação registrada, passaram **551 testes do backend** e **29 testes do frontend**. O fluxo de cadastro, preferências, geração, leitura, gabarito e histórico também foi conferido no navegador, em computador e celular, usando o ambiente demo.
+Na última verificação registrada, passaram **579 testes do backend** e **37 testes do frontend**. O fluxo de cadastro, preferências, geração, leitura, gabarito e histórico foi conferido no navegador usando o ambiente demo. A revisão curricular, a liberação por matéria/ano e a indicação de disponibilidade também foram conferidas na interface conectada ao ambiente principal.
 
 ### Backend
 
@@ -145,10 +146,10 @@ Os testes verificam validação dos formulários, composição do pedido, erros 
 
 ## Desenvolvimento do frontend
 
-Inicie somente a API demo:
+O frontend utiliza por padrão a API principal em `http://127.0.0.1:8080`. Prepare esse ambiente conforme a seção seguinte e execute:
 
 ```bash
-docker compose -f compose.demo.yaml --profile swagger up --build -d --wait --wait-timeout 120 api
+docker compose up --build -d --wait --wait-timeout 120 app
 ```
 
 Em outro terminal:
@@ -159,15 +160,15 @@ npm ci
 npm run dev
 ```
 
-O Vite utiliza a porta 5173 e encaminha `/api` para o backend demo. Encerre o frontend Docker antes de iniciar o Vite na mesma porta:
+O Vite utiliza a porta 5173 e encaminha `/api` para o backend principal. Encerre o frontend Docker antes de iniciar o Vite na mesma porta:
 
 ```bash
-docker compose -f compose.demo.yaml --profile frontend stop web
+docker compose -f compose.yaml -f compose.frontend.yaml stop web
 ```
 
-Os padrões funcionam sem configuração adicional. Para personalizar, utilize `frontend/.env.example` como referência. `VITE_API_MODE` define `demo` ou `local`, e `API_PROXY_TARGET` aponta para a API correspondente. Chaves de IA e senhas pertencem ao backend.
+Para desenvolver com a simulação, inicie a API de `compose.demo.yaml` e configure `VITE_API_MODE=demo` e `API_PROXY_TARGET=http://127.0.0.1:8081` no `.env.local` do frontend. A demonstração Docker continua explicitamente configurada como `demo`. Para outras opções, utilize `frontend/.env.example` como referência. Chaves de IA e senhas pertencem ao backend.
 
-Para atualizar os tipos após alterar o contrato, com a API demo em execução:
+Para atualizar os tipos após alterar o contrato, com a API principal em execução:
 
 ```bash
 cd frontend
@@ -197,7 +198,9 @@ docker compose -f compose.demo.yaml --profile frontend stop web
 docker compose -f compose.yaml -f compose.frontend.yaml up --build -d --wait --wait-timeout 120 web
 ```
 
-A geração real exige conteúdo curricular revisado/liberado e `GEMINI_API_KEY` configurada no `.env` do backend. Após alterar a configuração, recrie o serviço `app`. O primeiro teste com chave real continua pendente.
+Acesse **BNCC** no menu para selecionar o documento, a matéria e o ano. Confira as habilidades e competências com as páginas de origem, registre as decisões e utilize **Liberar matéria e ano** quando todos os itens dessa combinação estiverem aprovados. Outros conteúdos podem continuar pendentes. As competências compartilhadas e as habilidades utilizadas por uma liberação ficam protegidas contra edição; correções posteriores exigem uma nova revisão do documento.
+
+A geração real exige a combinação curricular liberada e `GEMINI_API_KEY` configurada no `.env` do backend. Após alterar a configuração, recrie o serviço `app`. O primeiro teste com chave real continua pendente.
 
 ## Estado atual e limites
 

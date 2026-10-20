@@ -168,4 +168,24 @@ final class OpenApiTest extends TestCase
             self::assertFalse($validator->validate(json_decode(json_encode($value, JSON_THROW_ON_ERROR)), $schema)->isValid(), $name);
         }
     }
+
+    public function testScopedCurriculumMetadataPreservesGlobalAndHistoricalContracts(): void
+    {
+        $result = json_decode(file_get_contents(__DIR__ . '/../../config/openapi/simulated-response.json'), true, flags: JSON_THROW_ON_ERROR);
+        $release = ['id' => 9, 'subject' => 'matematica', 'grade' => 6, 'released_at' => '2026-10-20 15:00:00'];
+        $result['bncc_context']['document']['status'] = 'draft';
+        $result['bncc_context']['document']['ready_at'] = null;
+        $result['bncc_context']['document']['release'] = $release;
+        $result['generation']['bncc_validation']['curriculum_release'] = $release;
+        $this->assertOpenApiSchema('GenerationResult', $result);
+        $this->assertOpenApiSchema('BnccReleaseRequest', ['subject' => 'matematica', 'grade' => 6]);
+        $validator = new Validator();
+        foreach ([['subject' => 'matematica', 'grade' => '6'], ['subject' => 'matematica', 'grade' => 10],
+            ['subject' => 'matematica', 'grade' => 6, 'approve_all' => true]] as $input) {
+            $spec = OpenApiDefinition::build();
+            $schema = json_decode(json_encode(['$schema' => 'https://json-schema.org/draft/2020-12/schema',
+                '$ref' => '#/components/schemas/BnccReleaseRequest', 'components' => $spec['components']], JSON_THROW_ON_ERROR));
+            self::assertFalse($validator->validate(json_decode(json_encode($input, JSON_THROW_ON_ERROR)), $schema)->isValid());
+        }
+    }
 }

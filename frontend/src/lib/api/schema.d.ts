@@ -123,7 +123,7 @@ export interface paths {
         put?: never;
         /**
          * Gerar e salvar uma prova
-         * @description Valida o pedido, busca o contexto BNCC, chama o provedor e salva prova/gabarito. Retorna exam.id e generation.id. teacher_id é opcional: use o id retornado por POST /teachers para herdar nome, escola e fonte. exam_header e formatting enviados prevalecem sobre o cadastro; null deixa um campo do cabeçalho em branco. Matéria e ano são preenchidos a partir do contexto BNCC. O backend salva uma cópia do cabeçalho e da formatação, sem enviá-los à IA. Corpo máximo: 64 KiB. Erros após o registro incluem error.generation_id. **SIMULAÇÃO:** use matematica, grade 6, topics [frações], 3 questões, uma de cada tipo, image_mode none. Alternativas (2–6) e afirmações (1–10) são configuráveis. As questões são fixas; textos livres não são interpretados. Nenhuma chamada de IA.
+         * @description Valida o pedido, busca o contexto BNCC, chama o provedor e salva prova/gabarito. Retorna exam.id e generation.id. teacher_id é opcional: use o id retornado por POST /teachers para herdar nome, escola e fonte. exam_header e formatting enviados prevalecem sobre o cadastro; null deixa um campo do cabeçalho em branco. Matéria e ano são preenchidos a partir do contexto BNCC. O backend salva uma cópia do cabeçalho e da formatação, sem enviá-los à IA. Corpo máximo: 64 KiB. Erros após o registro incluem error.generation_id. Exige currículo liberado para a matéria e o ano e GEMINI_API_KEY configurada no servidor. A liberação pode ser global ou por matéria/ano. A chave nunca é enviada neste formulário.
          */
         post: operations["generateExam"];
         delete?: never;
@@ -223,7 +223,7 @@ export interface paths {
         put?: never;
         /**
          * Buscar habilidades por matéria, ano e tópicos
-         * @description Consulta sem escrita. Usa apenas uma revisão liberada. Corpo máximo: 8 KiB. Se algum tópico não tiver correspondência lexical, retorna 422 topics_without_matches; currículo não liberado retorna 409.
+         * @description Consulta sem escrita. Usa apenas uma revisão liberada para a matéria e o ano solicitados, globalmente ou por escopo. Corpo máximo: 8 KiB. Se algum tópico não tiver correspondência lexical, retorna 422 topics_without_matches; currículo não liberado retorna 409.
          */
         post: operations["findBnccContext"];
         delete?: never;
@@ -239,7 +239,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Listar os documentos importados
+         * @description Retorna os metadados de todas as revisões, mais recentes primeiro, sem texto das páginas ou caminho interno. Um documento draft pode ter matérias e anos já liberados; consulte releases para conhecer a disponibilidade.
+         */
+        get: operations["listDocuments"];
         put?: never;
         /**
          * Importar PDF e extrair páginas
@@ -345,7 +349,7 @@ export interface paths {
         };
         /**
          * Listar habilidades
-         * @description Paginação por offset; avance pelo número de itens retornados até total.
+         * @description Paginação por offset; avance pelo número de itens retornados até total. Os filtros subject e grade restringem habilidades da matéria e do ano.
          */
         get: operations["listSkills"];
         put?: never;
@@ -385,7 +389,7 @@ export interface paths {
         };
         /**
          * Listar competências
-         * @description Inclui origens e estado de revisão. Esta lista não usa paginação.
+         * @description Inclui origens e estado de revisão. subject seleciona somente as competências gerais, da área e do componente aplicáveis à matéria. As competências são compartilhadas entre os anos; grade é aceito de 1 a 9 sem reduzir essa lista. Esta lista não usa paginação.
          */
         get: operations["listCompetencies"];
         put?: never;
@@ -411,7 +415,7 @@ export interface paths {
         head?: never;
         /**
          * Registrar revisão de habilidade
-         * @description **Altera o item no banco.** Use approved somente após conferir a fonte. note é obrigatório; description opcional permite apenas recompor espaços/hífens. Revisões ready são imutáveis (409). O currículo demo já está ready. Corpo máximo: 8 KiB.
+         * @description **Altera o item no banco.** Use approved somente após conferir a fonte. note é obrigatório; description opcional permite apenas recompor espaços/hífens. Revisões ready e itens já usados em uma liberação parcial são imutáveis (409). Outros itens de um documento draft continuam editáveis. O currículo demo já está ready. Corpo máximo: 8 KiB.
          */
         patch: operations["reviewSkill"];
         trace?: never;
@@ -431,9 +435,33 @@ export interface paths {
         head?: never;
         /**
          * Registrar revisão de competência
-         * @description **Altera o item no banco.** Use approved somente após conferir a fonte. note é obrigatório; description opcional permite apenas recompor espaços/hífens. Revisões ready são imutáveis (409). O currículo demo já está ready. Corpo máximo: 8 KiB.
+         * @description **Altera o item no banco.** Use approved somente após conferir a fonte. note é obrigatório; description opcional permite apenas recompor espaços/hífens. Revisões ready e itens já usados em uma liberação parcial são imutáveis (409). Outros itens de um documento draft continuam editáveis. O currículo demo já está ready. Corpo máximo: 8 KiB.
          */
         patch: operations["reviewCompetency"];
+        trace?: never;
+    };
+    "/bncc/documents/{id}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar liberação por matéria e ano
+         * @description Lista os pares matéria/ano presentes nesta revisão e suas contagens de revisão. status ready indica liberação para geração; pending ainda exige conferência ou publicação. Competências gerais e de área podem ser compartilhadas por vários pares.
+         */
+        get: operations["listCurriculumReleases"];
+        put?: never;
+        /**
+         * Liberar uma matéria e um ano revisados
+         * @description **Grava a liberação do par informado.** Exige todas as habilidades da matéria/ano e todas as competências aplicáveis aprovadas e com origens válidas. Os demais pares podem continuar pendentes. O documento permanece draft, e os itens usados por esta liberação ficam imutáveis. Esta operação não aprova itens automaticamente nem substitui sua conferência com o PDF. Corpo máximo: 8 KiB.
+         */
+        post: operations["publishCurriculumScope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/bncc/documents/{id}/publish": {
@@ -542,7 +570,7 @@ export interface components {
             grade: number;
             /** @description Tópicos não vazios; a busca normaliza palavras e acentos, sem interpretar sinônimos. */
             topics: string[];
-            /** @description Opcional. Revisão ready específica. Omitir seleciona a revisão liberada mais recente. Não envie null. */
+            /** @description Opcional. Revisão específica liberada para a matéria e o ano solicitados. Omitir seleciona a revisão liberada mais recente para esse par. Não envie null. */
             bncc_document_id?: number;
             /**
              * @description Deve ser pelo menos o número de tópicos distintos.
@@ -829,10 +857,21 @@ export interface components {
             sha256: string;
             page_count: number;
             /** @enum {string} */
-            status: "draft" | "ready";
+            status: "draft" | "ready" | "archived";
             ready_at: string | null;
             structured_at: string | null;
             structure_profile: string | null;
+            release?: {
+                id: number;
+                /**
+                 * @description Código da matéria cadastrada. Ex.: matematica, lingua_portuguesa, ciencias.
+                 * @example matematica
+                 */
+                subject: string;
+                grade: number;
+                /** @description Data UTC no formato YYYY-MM-DD HH:MM:SS. */
+                released_at: string;
+            };
         };
         Document: {
             id: number;
@@ -842,7 +881,7 @@ export interface components {
             sha256: string;
             page_count: number;
             /** @enum {string} */
-            status: "draft" | "ready";
+            status: "draft" | "ready" | "archived";
             ready_at: string | null;
             structured_at: string | null;
             structure_profile: string | null;
@@ -857,6 +896,9 @@ export interface components {
             structure_report: (Record<string, never> | unknown[]) | null;
         } & {
             [key: string]: unknown;
+        };
+        BnccDocumentList: {
+            items: components["schemas"]["Document"][];
         };
         Pages: {
             document_id: number;
@@ -945,6 +987,8 @@ export interface components {
                 review_note: string | null;
                 /** @example EF06MA07 */
                 code: string;
+                /** @description true quando o item está imutável: documento ready/archived ou conteúdo compartilhado por alguma matéria/ano já liberados. */
+                locked: boolean;
             }[];
         };
         Skill: {
@@ -956,6 +1000,8 @@ export interface components {
             review_note: string | null;
             /** @example EF06MA07 */
             code: string;
+            /** @description true quando o item está imutável: documento ready/archived ou conteúdo compartilhado por alguma matéria/ano já liberados. */
+            locked: boolean;
             document_id: number;
             component_id: number;
             grades: number[];
@@ -998,14 +1044,73 @@ export interface components {
                 review_note: string | null;
                 document_id: number;
                 source_metadata: (Record<string, never> | unknown[]) | null;
+                /** @description true quando o item está imutável: documento ready/archived ou conteúdo compartilhado por alguma matéria/ano já liberados. */
+                locked: boolean;
             } & {
                 [key: string]: unknown;
             })[];
         };
+        BnccReleaseSummary: {
+            subject: components["schemas"]["Subject"];
+            grade: components["schemas"]["Grade"];
+            /** @enum {string} */
+            status: "pending" | "ready";
+            released_at: string | null;
+            review: {
+                skills: {
+                    pending: number;
+                    approved: number;
+                    rejected: number;
+                    total: number;
+                };
+                competencies: {
+                    pending: number;
+                    approved: number;
+                    rejected: number;
+                    total: number;
+                };
+            };
+        };
+        BnccRelease: {
+            document_id: number;
+            subject: components["schemas"]["Subject"];
+            grade: components["schemas"]["Grade"];
+            /** @enum {string} */
+            status: "pending" | "ready";
+            released_at: string | null;
+            review: {
+                skills: {
+                    pending: number;
+                    approved: number;
+                    rejected: number;
+                    total: number;
+                };
+                competencies: {
+                    pending: number;
+                    approved: number;
+                    rejected: number;
+                    total: number;
+                };
+            };
+        };
+        BnccReleaseList: {
+            document_id: number;
+            /** @enum {string} */
+            status: "draft" | "ready" | "archived";
+            items: components["schemas"]["BnccReleaseSummary"][];
+        };
+        BnccReleaseRequest: {
+            /**
+             * @description Código da matéria cadastrada. Ex.: matematica, lingua_portuguesa, ciencias.
+             * @example matematica
+             */
+            subject: string;
+            grade: number;
+        };
         Structure: {
             document_id: number;
             /** @enum {string} */
-            status: "draft" | "ready";
+            status: "draft" | "ready" | "archived";
             structure_profile: string | null;
             structured_at: string | null;
             report: (Record<string, never> | unknown[]) | null;
@@ -1068,6 +1173,17 @@ export interface components {
             semantic_review: "not_performed";
             /** @constant */
             teacher_review_required: true;
+            curriculum_release?: {
+                id: number;
+                /**
+                 * @description Código da matéria cadastrada. Ex.: matematica, lingua_portuguesa, ciencias.
+                 * @example matematica
+                 */
+                subject: string;
+                grade: number;
+                /** @description Data UTC no formato YYYY-MM-DD HH:MM:SS. */
+                released_at: string;
+            };
         };
         NormalizedRequest: {
             /**
@@ -2290,6 +2406,46 @@ export interface operations {
             };
         };
     };
+    listDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BnccDocumentList"];
+                };
+            };
+            /** @description Falha interna controlada. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Banco/provedor indisponível ou IA sem configuração. */
+            503: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     importDocument: {
         parameters: {
             query?: never;
@@ -2748,6 +2904,16 @@ export interface operations {
             query?: {
                 offset?: number;
                 limit?: number;
+                /**
+                 * @description Código da matéria para revisar somente seu conteúdo.
+                 * @example matematica
+                 */
+                subject?: string;
+                /**
+                 * @description Ano escolar para a revisão selecionada.
+                 * @example 6
+                 */
+                grade?: number;
             };
             header?: never;
             path: {
@@ -2881,7 +3047,18 @@ export interface operations {
     };
     listCompetencies: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Código da matéria para revisar somente seu conteúdo.
+                 * @example matematica
+                 */
+                subject?: string;
+                /**
+                 * @description Ano escolar para a revisão selecionada.
+                 * @example 6
+                 */
+                grade?: number;
+            };
             header?: never;
             path: {
                 /**
@@ -2994,6 +3171,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Envio maior que o limite. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Content-Type incompatível. */
             415: {
                 headers: {
@@ -3078,6 +3264,174 @@ export interface operations {
             };
             /** @description Conflito, e-mail já cadastrado ou currículo ainda não liberado. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Envio maior que o limite. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Content-Type incompatível. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Entrada inválida, tópico sem correspondência ou recusa do provedor. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Falha interna controlada. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Banco/provedor indisponível ou IA sem configuração. */
+            503: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listCurriculumReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID neste ambiente; use o retornado pela operação anterior.
+                 * @example 1
+                 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BnccReleaseList"];
+                };
+            };
+            /** @description Registro não encontrado neste ambiente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Entrada inválida, tópico sem correspondência ou recusa do provedor. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Falha interna controlada. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Banco/provedor indisponível ou IA sem configuração. */
+            503: {
+                headers: {
+                    /** @description Segundos, quando informados pelo provedor. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    publishCurriculumScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID neste ambiente; use o retornado pela operação anterior.
+                 * @example 1
+                 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BnccReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BnccRelease"];
+                };
+            };
+            /** @description Registro não encontrado neste ambiente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflito, e-mail já cadastrado ou currículo ainda não liberado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Envio maior que o limite. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

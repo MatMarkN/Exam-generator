@@ -68,7 +68,7 @@ final class ApiSchemas
             'grade' => self::integer(1, 9), 'topics' => $topics];
         $distribution = self::object(array_fill_keys(ExamGenerationRequest::QUESTION_TYPES, self::integer(0, 30)));
         $requestProperties = [...$baseInput,
-            'bncc_document_id' => [...$id, 'description' => 'Opcional. Revisão ready específica. Omitir seleciona a revisão liberada mais recente. Não envie null.'],
+            'bncc_document_id' => [...$id, 'description' => 'Opcional. Revisão específica liberada para a matéria e o ano solicitados. Omitir seleciona a revisão liberada mais recente para esse par. Não envie null.'],
             'context_limit' => [...self::integer(1, 30), 'default' => 12, 'description' => 'Deve ser pelo menos o número de tópicos distintos.'],
             'question_count' => self::integer(1, 30),
             'question_mode' => ['type' => 'string', 'enum' => ['automatic', 'manual'], 'default' => 'automatic'],
@@ -145,13 +145,17 @@ final class ApiSchemas
 
         $document = ['id' => $id, 'title' => $text, 'version_label' => $text, 'revision' => $id,
             'sha256' => ['type' => 'string', 'pattern' => '^[a-f0-9]{64}$'], 'page_count' => $id,
-            'status' => ['type' => 'string', 'enum' => ['draft', 'ready']],
+            'status' => ['type' => 'string', 'enum' => ['draft', 'ready', 'archived']],
             'ready_at' => self::nullable($timestamp), 'structured_at' => self::nullable($timestamp), 'structure_profile' => $nullText];
-        $schemas['ContextDocument'] = self::object($document);
+        $curriculumRelease = self::object([
+            'id' => $id, 'subject' => $baseInput['subject'], 'grade' => $baseInput['grade'], 'released_at' => $timestamp,
+        ]);
+        $schemas['ContextDocument'] = self::object([...$document, 'release' => $curriculumRelease], array_keys($document));
         $schemas['Document'] = self::object([...$document, 'original_filename' => $text,
             'curriculum_status' => ['type' => 'string', 'enum' => ['ready', 'awaiting_review', 'awaiting_structuring_and_review']],
             'created_at' => $timestamp, 'extracted_at' => self::nullable($timestamp), 'extractor_version' => $nullText,
             'extraction_warnings' => $metadata, 'structure_report' => $metadata], null, true);
+        $schemas['BnccDocumentList'] = self::object(['items' => self::list(self::ref('Document'))]);
         $schemas['Pages'] = self::object(['document_id' => $id, 'total_pages' => $id,
             'pages' => self::list(self::object(['page_number' => $id, 'source_text' => $text, 'detected_skill_codes' => self::list($code)])),
             'next_page' => $nullId]);
@@ -173,7 +177,8 @@ final class ApiSchemas
             'selection' => self::object(['method' => ['const' => 'lexical-v1'], 'limit' => self::integer(1, 30),
                 'total_matches' => $count, 'returned_skills' => $count, 'truncated' => $bool, 'all_topics_covered' => ['const' => true]])]);
         $reviewResult = $schemas['ReviewResult']['properties'];
-        $skillSummary = [...$reviewResult, 'code' => $code];
+        $locked = [...$bool, 'description' => 'true quando o item está imutável: documento ready/archived ou conteúdo compartilhado por alguma matéria/ano já liberados.'];
+        $skillSummary = [...$reviewResult, 'code' => $code, 'locked' => $locked];
         $schemas['Skills'] = self::object(['document_id' => $id, 'total' => $count, 'offset' => $count, 'limit' => self::integer(1, 50),
             'skills' => self::list(self::object($skillSummary))]);
         $schemas['Skill'] = self::object([...$skillSummary, 'document_id' => $id, 'component_id' => $id,
@@ -183,9 +188,17 @@ final class ApiSchemas
                 'source_excerpt' => $text, 'context_metadata' => $metadata,
             ], null, true))], null, true);
         $schemas['Competencies'] = self::object(['document_id' => $id, 'competencies' => self::list(self::object([
-            ...$competency, ...$reviewResult, 'document_id' => $id, 'source_metadata' => $metadata,
+            ...$competency, ...$reviewResult, 'document_id' => $id, 'source_metadata' => $metadata, 'locked' => $locked,
         ], null, true))]);
         $reviewCounts = self::object(array_fill_keys(['pending', 'approved', 'rejected', 'total'], $count));
+        $release = ['subject' => self::ref('Subject'), 'grade' => self::ref('Grade'),
+            'status' => ['type' => 'string', 'enum' => ['pending', 'ready']], 'released_at' => self::nullable($timestamp),
+            'review' => self::object(['skills' => $reviewCounts, 'competencies' => $reviewCounts])];
+        $schemas['BnccReleaseSummary'] = self::object($release);
+        $schemas['BnccRelease'] = self::object(['document_id' => $id, ...$release]);
+        $schemas['BnccReleaseList'] = self::object(['document_id' => $id, 'status' => $document['status'],
+            'items' => self::list(self::ref('BnccReleaseSummary'))]);
+        $schemas['BnccReleaseRequest'] = self::object(array_intersect_key($baseInput, array_flip(['subject', 'grade'])));
         $schemas['Structure'] = self::object(['document_id' => $id, 'status' => $document['status'], 'structure_profile' => $nullText,
             'structured_at' => self::nullable($timestamp), 'report' => $metadata,
             'review' => self::object(['skills' => $reviewCounts, 'competencies' => $reviewCounts]),
@@ -201,6 +214,7 @@ final class ApiSchemas
             'topic_references' => self::list(self::object(['topic' => $text, 'skill_codes' => self::list($code), 'question_numbers' => self::list($id)])),
             'unused_context_skill_codes' => self::list($code), 'semantic_review' => ['const' => 'not_performed'],
             'teacher_review_required' => ['const' => true]]);
+        $schemas['BnccValidation']['properties']['curriculum_release'] = $curriculumRelease;
         $normalizedRequest = $requestProperties;
         unset($normalizedRequest['bncc_document_id'], $normalizedRequest['context_limit'], $normalizedRequest['teacher_id']);
         $normalizedRequest['question_distribution'] = self::nullable($distribution);

@@ -1,4 +1,4 @@
-const mode = import.meta.env.VITE_API_MODE || "demo"
+const mode = import.meta.env.VITE_API_MODE || "local"
 
 export const environment = Object.freeze({
   isDemo: mode === "demo",

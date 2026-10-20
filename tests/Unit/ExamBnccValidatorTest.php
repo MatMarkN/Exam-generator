@@ -89,6 +89,54 @@ final class ExamBnccValidatorTest extends TestCase
         (new ExamBnccValidator())->validateContext(ExamGenerationRequest::fromArray(ExamFixture::input(['bncc_document_id' => 2])), ExamFixture::context());
     }
 
+    public function testPartialReleaseAuthorizesOnlyTheRequestedSubjectAndYearAndIsRecordedInReport(): void
+    {
+        $context = $this->partiallyReleasedContext();
+        $request = ExamGenerationRequest::fromArray(ExamFixture::input());
+        $validator = new ExamBnccValidator();
+        $validator->validateContext($request, $context);
+        $report = $validator->validateReferences(ExamFixture::response(), $request, $context);
+        self::assertSame($context['document']['release'], $report['curriculum_release']);
+        self::assertSame('draft', $context['document']['status']);
+    }
+
+    #[DataProvider('invalidPartialReleases')]
+    public function testPartialReleaseCannotAuthorizeOtherSubjectsYearsOrIncompleteReleaseMetadata(mixed $release): void
+    {
+        $context = $this->partiallyReleasedContext();
+        $context['document']['release'] = $release;
+        $this->expectException(ImportException::class);
+        (new ExamBnccValidator())->validateContext(ExamGenerationRequest::fromArray(ExamFixture::input()), $context);
+    }
+
+    public static function invalidPartialReleases(): array
+    {
+        $valid = ['id' => 1, 'subject' => 'matematica', 'grade' => 6, 'released_at' => '2026-10-20 15:00:00'];
+        return [
+            [null], [false], [[]],
+            [[...$valid, 'id' => 0]], [[...$valid, 'id' => '1']],
+            [[...$valid, 'subject' => 'arte']], [[...$valid, 'grade' => 7]], [[...$valid, 'grade' => '6']],
+            [[...$valid, 'released_at' => null]], [[...$valid, 'released_at' => ' ']],
+        ];
+    }
+
+    public function testArchivalInvalidatesAnExistingPartialRelease(): void
+    {
+        $context = $this->partiallyReleasedContext();
+        $context['document']['status'] = 'archived';
+        $this->expectException(ImportException::class);
+        (new ExamBnccValidator())->validateContext(ExamGenerationRequest::fromArray(ExamFixture::input()), $context);
+    }
+
+    private function partiallyReleasedContext(): array
+    {
+        $context = ExamFixture::context();
+        $context['document']['status'] = 'draft';
+        $context['document']['ready_at'] = null;
+        $context['document']['release'] = ['id' => 1, 'subject' => 'matematica', 'grade' => 6, 'released_at' => '2026-10-20 15:00:00'];
+        return $context;
+    }
+
     public function testRepeatedSkillsCannotCreateAmbiguousReferences(): void
     {
         $context = ExamFixture::context();

@@ -160,19 +160,35 @@ final class BnccCurriculumRepository
             ])];
     }
 
-    public function skills(int $documentId, int $offset, int $limit): array
+    public function skills(int $documentId, int $offset, int $limit, ?string $subject = null, ?int $grade = null): array
     {
-        $this->document($documentId);
-        $rows = $this->database->select('bncc_skills', ['id', 'code', 'description', 'review_status', 'reviewed_at', 'review_note'], [
-            'document_id' => $documentId, 'ORDER' => ['code' => 'ASC'], 'LIMIT' => [$offset, $limit],
-        ]);
-        return ['document_id' => $documentId, 'total' => $this->database->count('bncc_skills', ['document_id' => $documentId]),
+        $document = $this->document($documentId);
+        $where = ' WHERE s.document_id = :document';
+        $parameters = [':document' => $documentId];
+        if ($subject !== null) {
+            $where .= ' AND sub.code = :subject';
+            $parameters[':subject'] = $subject;
+        }
+        if ($grade !== null) {
+            $where .= ' AND EXISTS (SELECT 1 FROM bncc_skill_grades sg INNER JOIN school_grades g ON g.id = sg.school_grade_id
+                WHERE sg.skill_id = s.id AND g.year_number = :grade AND g.education_stage = \'ensino_fundamental\')';
+            $parameters[':grade'] = $grade;
+        }
+        $from = ' FROM bncc_skills s INNER JOIN bncc_components c ON c.id = s.component_id AND c.document_id = s.document_id
+            INNER JOIN subjects sub ON sub.id = c.subject_id';
+        $rows = $this->database->query('SELECT s.id, s.code, s.description, s.review_status, s.reviewed_at, s.review_note, '
+            . BnccReleaseRepository::publicationLockSql('skill') . ' AS locked' . $from . $where
+            . ' ORDER BY s.code LIMIT ' . $limit . ' OFFSET ' . $offset, $parameters)->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as &$row) {
+            $row['locked'] = $document['status'] !== 'draft' || (bool) $row['locked'];
+        }
+        return ['document_id' => $documentId, 'total' => (int) $this->database->query('SELECT COUNT(*)' . $from . $where, $parameters)->fetchColumn(),
             'offset' => $offset, 'limit' => $limit, 'skills' => $rows];
     }
 
     public function skill(int $documentId, string $code): array
     {
-        $this->document($documentId);
+        $document = $this->document($documentId);
         $skill = $this->database->get('bncc_skills', '*', ['document_id' => $documentId, 'code' => $code])
             ?? throw new ImportException('not_found', 'Habilidade não encontrada nessa revisão.');
         $skill['grades'] = $this->database->select('bncc_skill_grades', ['[>]school_grades' => ['school_grade_id' => 'id']],
@@ -183,15 +199,30 @@ final class BnccCurriculumRepository
         }
         $component = $this->database->get('bncc_components', ['subject_id', 'area_id'], ['id' => $skill['component_id']]);
         $skill['subject'] = $this->database->get('subjects', ['code', 'name'], ['id' => $component['subject_id']]);
+        $skill['locked'] = $document['status'] !== 'draft' || (new BnccReleaseRepository($this->database))->itemIsPublished($documentId, 'skill', $skill['id']);
         return $skill;
     }
 
-    public function competencies(int $documentId): array
+    public function competencies(int $documentId, ?string $subject = null, ?int $grade = null): array
     {
-        $this->document($documentId);
-        $rows = $this->database->select('bncc_competencies', '*', ['document_id' => $documentId, 'ORDER' => ['id' => 'ASC']]);
+        $document = $this->document($documentId);
+        $where = ' WHERE p.document_id = :document';
+        $parameters = [':document' => $documentId];
+        if ($subject !== null) {
+            $component = $this->database->query('SELECT c.id, c.area_id FROM bncc_components c INNER JOIN subjects s ON s.id = c.subject_id
+                WHERE c.document_id = :document AND s.code = :subject', [':document' => $documentId, ':subject' => $subject])->fetch(PDO::FETCH_ASSOC);
+            if ($component === false) {
+                return ['document_id' => $documentId, 'competencies' => []];
+            }
+            $where .= ' AND (p.scope = \'general\' OR (p.scope = \'area\' AND p.area_id = :area) OR (p.scope = \'component\' AND p.component_id = :component))';
+            $parameters[':area'] = $component['area_id'];
+            $parameters[':component'] = $component['id'];
+        }
+        $rows = $this->database->query('SELECT p.*, ' . BnccReleaseRepository::publicationLockSql('competency')
+            . ' AS locked FROM bncc_competencies p' . $where . ' ORDER BY p.id', $parameters)->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as &$row) {
             $row['source_metadata'] = $row['source_metadata'] === null ? null : json_decode($row['source_metadata'], true, flags: JSON_THROW_ON_ERROR);
+            $row['locked'] = $document['status'] !== 'draft' || (bool) $row['locked'];
         }
         return ['document_id' => $documentId, 'competencies' => $rows];
     }
@@ -211,6 +242,7 @@ final class BnccCurriculumRepository
             $where = ['document_id' => $documentId, $type === 'skill' ? 'code' : 'id' => $key];
             $item = $this->database->get($table, '*', $where)
                 ?? throw new ImportException('not_found', 'Item não encontrado nessa revisão.');
+            (new BnccReleaseRepository($this->database))->assertItemMutable($documentId, $type, $item);
             if ($description !== null) {
                 // A revisão pode recompor espaçamento/hifens de quebra de linha, preservando letras e pontuação.
                 $canonical = static fn (string $text): string => preg_replace('/[\s-]+/u', '', $text);
@@ -266,6 +298,16 @@ final class BnccCurriculumRepository
             $this->rollback();
             throw $exception;
         }
+    }
+
+    public function releases(int $documentId): array
+    {
+        return (new BnccReleaseRepository($this->database))->listing($documentId);
+    }
+
+    public function publishScope(int $documentId, string $subject, int $grade): array
+    {
+        return (new BnccReleaseRepository($this->database))->publish($documentId, $subject, $grade);
     }
 
     private function document(int $documentId): array

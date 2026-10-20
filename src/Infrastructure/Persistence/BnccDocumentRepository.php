@@ -20,6 +20,11 @@ final class BnccDocumentRepository
         return $row === null ? null : $this->decodeDocument($row);
     }
 
+    public function listing(): array
+    {
+        return array_map($this->decodeDocument(...), $this->database->select('bncc_documents', '*', ['ORDER' => ['id' => 'DESC']]));
+    }
+
     public function latest(string $hash): ?array
     {
         $row = $this->database->get('bncc_documents', '*', ['sha256' => $hash, 'ORDER' => ['revision' => 'DESC']]);

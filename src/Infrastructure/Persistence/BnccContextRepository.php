@@ -45,11 +45,17 @@ final class BnccContextRepository
             $document = $this->database->get('bncc_documents', $columns, ['id' => $query->documentId])
                 ?? throw new ImportException('not_found', 'Documento não encontrado.');
         } else {
-            $document = $this->database->get('bncc_documents', $columns, [
-                'status' => 'ready', 'ORDER' => ['ready_at' => 'DESC', 'id' => 'DESC'],
-            ]) ?? throw new ImportException('curriculum_not_ready', 'Ainda não há uma revisão da BNCC liberada. Conclua a revisão e a liberação antes de consultar o contexto.');
+            $document = $this->database->query('SELECT ' . implode(', ', array_map(static fn (string $column): string => 'd.' . $column, $columns)) . '
+                FROM bncc_documents d LEFT JOIN bncc_components c ON c.document_id = d.id AND c.subject_id = :subject
+                LEFT JOIN bncc_curriculum_releases r ON r.document_id = d.id AND r.component_id = c.id AND r.school_grade_id = :grade
+                WHERE d.structured_at IS NOT NULL AND (d.status = \'ready\' OR (d.status = \'draft\' AND r.id IS NOT NULL))
+                ORDER BY CASE WHEN d.status = \'ready\' THEN d.ready_at ELSE r.released_at END DESC, d.id DESC LIMIT 1',
+                [':subject' => $subject['id'], ':grade' => $grade['id']])->fetch(PDO::FETCH_ASSOC);
+            if ($document === false) {
+                throw new ImportException('curriculum_not_ready', 'Ainda não há uma revisão da BNCC liberada para esta matéria e ano. Conclua a revisão e a liberação desse conteúdo.');
+            }
         }
-        if ($document['status'] !== 'ready' || $document['structured_at'] === null) {
+        if (!in_array($document['status'], ['draft', 'ready'], true) || $document['structured_at'] === null) {
             throw new ImportException('document_not_ready', 'O documento solicitado ainda não está disponível para uso curricular.');
         }
         $component = $this->database->query('SELECT c.id, a.id AS area_id, a.code AS area_code, a.name AS area_name
@@ -58,6 +64,15 @@ final class BnccContextRepository
             [':document' => $document['id'], ':subject' => $subject['id']])->fetch(PDO::FETCH_ASSOC);
         if ($component === false) {
             throw new ImportException('subject_not_available', 'Esta revisão da BNCC não contém a matéria solicitada.');
+        }
+        if ($document['status'] === 'draft') {
+            $release = $this->database->get('bncc_curriculum_releases', ['id', 'released_at'], [
+                'document_id' => $document['id'], 'component_id' => $component['id'], 'school_grade_id' => $grade['id'],
+            ]);
+            if ($release === null) {
+                throw new ImportException('document_not_ready', 'Esta matéria e ano ainda não foram liberados nesta revisão da BNCC.');
+            }
+            $document['release'] = [...$release, 'subject' => $subject['code'], 'grade' => $grade['year_number']];
         }
         $rows = $this->database->query('SELECT s.id, s.code, s.description
             FROM bncc_skills s INNER JOIN bncc_skill_grades g ON g.skill_id = s.id

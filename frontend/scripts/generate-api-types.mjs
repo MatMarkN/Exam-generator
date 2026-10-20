@@ -2,7 +2,7 @@ import fs from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import openapiTS, { astToString } from "openapi-typescript"
 
-const url = process.env.API_SCHEMA_URL || "http://127.0.0.1:8081/openapi.json"
+const url = process.env.API_SCHEMA_URL || "http://127.0.0.1:8080/openapi.json"
 const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
 if (!response.ok) throw new Error("A API não disponibilizou o contrato OpenAPI: HTTP " + response.status)
 const schema = await response.json()

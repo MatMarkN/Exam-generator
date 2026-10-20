@@ -62,7 +62,7 @@ final class OpenApiDefinition
             . 'Corpo máximo: 64 KiB. Erros após o registro incluem error.generation_id. '
             . ($demo ? '**SIMULAÇÃO:** use matematica, grade 6, topics [frações], 3 questões, uma de cada tipo, image_mode none. '
                 . 'Alternativas (2–6) e afirmações (1–10) são configuráveis. As questões são fixas; textos livres não são interpretados. Nenhuma chamada de IA.'
-                : 'Exige documento ready e GEMINI_API_KEY configurada no servidor. A BNCC local ainda precisa de revisão/liberação. A chave nunca é enviada neste formulário.'),
+                : 'Exige currículo liberado para a matéria e o ano e GEMINI_API_KEY configurada no servidor. A liberação pode ser global ou por matéria/ano. A chave nunca é enviada neste formulário.'),
             body: self::body('ExamRequest', [
                 'manual' => ['summary' => 'Três questões: uma de cada tipo', 'value' => self::examExample()],
                 'automatic' => ['summary' => 'Distribuição automática (sem question_distribution)',
@@ -83,7 +83,7 @@ final class OpenApiDefinition
             'Use generation.id (não confundir com exam.id). Inclui pedido, prompt, contexto, resultado ou erro. '
             . 'teacher_id é declarado, não autenticado. Uma interrupção pode deixar status running.', [$id], errors: [404, 422, 503]);
         $paths['/bncc/context']['post'] = self::operation('findBnccContext', 'Contexto BNCC', 'Buscar habilidades por matéria, ano e tópicos', 'BnccContext',
-            'Consulta sem escrita. Usa apenas uma revisão liberada. Corpo máximo: 8 KiB. '
+            'Consulta sem escrita. Usa apenas uma revisão liberada para a matéria e o ano solicitados, globalmente ou por escopo. Corpo máximo: 8 KiB. '
             . 'Se algum tópico não tiver correspondência lexical, retorna 422 topics_without_matches; currículo não liberado retorna 409.',
             body: self::body('ContextRequest', ['fractions' => ['summary' => 'Frações, 6º ano', 'value' => [
                 'subject' => 'matematica', 'grade' => 6, 'topics' => ['frações'], 'limit' => 12,
@@ -97,6 +97,9 @@ final class OpenApiDefinition
             '**Grava dados.** Selecione o arquivo no campo pdf. Não preencha manualmente o Content-Type: o navegador cria o boundary. '
             . 'Salva uma revisão draft; extrair páginas não aprova o currículo. Um mesmo PDF já importado retorna 409. '
             . 'A demonstração começa com currículo sintético e não contém o PDF oficial.', body: $upload, success: 201, errors: [409, 413, 415, 422, 503, 504]);
+        $paths['/bncc/documents']['get'] = self::operation('listDocuments', 'Documentos BNCC', 'Listar os documentos importados', 'BnccDocumentList',
+            'Retorna os metadados de todas as revisões, mais recentes primeiro, sem texto das páginas ou caminho interno. '
+            . 'Um documento draft pode ter matérias e anos já liberados; consulte releases para conhecer a disponibilidade.', errors: [503]);
         $paths['/bncc/documents/{id}']['get'] = self::operation('getDocument', 'Documentos BNCC', 'Consultar o documento', 'Document',
             'Metadados de extração e situação curricular, sem caminho interno do arquivo.', [$id], errors: [404, 422, 503]);
         $paths['/bncc/documents/{id}/pages']['get'] = self::operation('getDocumentPages', 'Documentos BNCC', 'Consultar texto por página', 'Pages',
@@ -113,26 +116,41 @@ final class OpenApiDefinition
         $paths['/bncc/documents/{id}/structure']['post'] = self::operation('structureDocument', 'Revisão BNCC', 'Estruturar habilidades e competências', 'Structure',
             '**Grava dados.** Interpreta o perfil BNCC 2018 EI/EF em uma revisão draft ainda não estruturada. '
             . 'Os itens entram pendentes de revisão. Não libera automaticamente o documento. Sem corpo.', [$id], errors: [404, 409, 422, 503]);
+        $subjectFilter = self::parameter('subject', ['type' => 'string', 'pattern' => '^[a-z][a-z0-9_]{1,39}$'], 'query', 'Código da matéria para revisar somente seu conteúdo.', 'matematica');
+        $gradeFilter = self::parameter('grade', ApiSchemas::integer(1, 9), 'query', 'Ano escolar para a revisão selecionada.', 6);
         $paths['/bncc/documents/{id}/skills']['get'] = self::operation('listSkills', 'Revisão BNCC', 'Listar habilidades', 'Skills',
-            'Paginação por offset; avance pelo número de itens retornados até total.', [$id,
+            'Paginação por offset; avance pelo número de itens retornados até total. Os filtros subject e grade restringem habilidades da matéria e do ano.', [$id,
                 self::parameter('offset', [...ApiSchemas::integer(0), 'default' => 0]),
                 self::parameter('limit', [...ApiSchemas::integer(1, 50), 'default' => 20]),
+                $subjectFilter, $gradeFilter,
             ], errors: [404, 422, 503]);
         $skillCode = self::parameter('code', ['type' => 'string', 'pattern' => '^EF[0-9]{2}[A-Z]{2}[0-9]{2}$'], 'path', 'Código da habilidade nesta revisão.', 'EF06MA07');
         $paths['/bncc/documents/{id}/skills/{code}']['get'] = self::operation('getSkill', 'Revisão BNCC', 'Inspecionar habilidade e origens', 'Skill',
             'Inclui anos associados, contextos, trechos e páginas para conferência com a fonte.', [$id, $skillCode], errors: [404, 422, 503]);
         $paths['/bncc/documents/{id}/competencies']['get'] = self::operation('listCompetencies', 'Revisão BNCC', 'Listar competências', 'Competencies',
-            'Inclui origens e estado de revisão. Esta lista não usa paginação.', [$id], errors: [404, 422, 503]);
+            'Inclui origens e estado de revisão. subject seleciona somente as competências gerais, da área e do componente aplicáveis à matéria. '
+            . 'As competências são compartilhadas entre os anos; grade é aceito de 1 a 9 sem reduzir essa lista. Esta lista não usa paginação.', [$id, $subjectFilter, $gradeFilter], errors: [404, 422, 503]);
         $reviewBody = self::body('ReviewRequest', ['pending' => ['summary' => 'Registrar uma revisão ainda pendente',
             'value' => ['status' => 'pending', 'note' => 'Aguardando conferência com a página de origem.']]]);
         $reviewDescription = '**Altera o item no banco.** Use approved somente após conferir a fonte. '
             . 'note é obrigatório; description opcional permite apenas recompor espaços/hífens. '
-            . 'Revisões ready são imutáveis (409). O currículo demo já está ready. Corpo máximo: 8 KiB.';
+            . 'Revisões ready e itens já usados em uma liberação parcial são imutáveis (409). '
+            . 'Outros itens de um documento draft continuam editáveis. O currículo demo já está ready. Corpo máximo: 8 KiB.';
         $paths['/bncc/documents/{id}/skills/{code}/review']['patch'] = self::operation('reviewSkill', 'Revisão BNCC', 'Registrar revisão de habilidade', 'ReviewResult',
-            $reviewDescription, [$id, $skillCode], body: $reviewBody, errors: [404, 409, 415, 422, 503]);
+            $reviewDescription, [$id, $skillCode], body: $reviewBody, errors: [404, 409, 413, 415, 422, 503]);
         $paths['/bncc/documents/{id}/competencies/{competencyId}/review']['patch'] = self::operation('reviewCompetency', 'Revisão BNCC', 'Registrar revisão de competência', 'ReviewResult',
             $reviewDescription, [$id, self::parameter('competencyId', ApiSchemas::integer(), 'path', 'ID da competência retornado na listagem.', 1)],
-            body: $reviewBody, errors: [404, 409, 415, 422, 503]);
+            body: $reviewBody, errors: [404, 409, 413, 415, 422, 503]);
+        $paths['/bncc/documents/{id}/releases']['get'] = self::operation('listCurriculumReleases', 'Revisão BNCC', 'Consultar liberação por matéria e ano', 'BnccReleaseList',
+            'Lista os pares matéria/ano presentes nesta revisão e suas contagens de revisão. '
+            . 'status ready indica liberação para geração; pending ainda exige conferência ou publicação. '
+            . 'Competências gerais e de área podem ser compartilhadas por vários pares.', [$id], errors: [404, 422, 503]);
+        $paths['/bncc/documents/{id}/releases']['post'] = self::operation('publishCurriculumScope', 'Revisão BNCC', 'Liberar uma matéria e um ano revisados', 'BnccRelease',
+            '**Grava a liberação do par informado.** Exige todas as habilidades da matéria/ano e todas as competências aplicáveis aprovadas e com origens válidas. '
+            . 'Os demais pares podem continuar pendentes. O documento permanece draft, e os itens usados por esta liberação ficam imutáveis. '
+            . 'Esta operação não aprova itens automaticamente nem substitui sua conferência com o PDF. Corpo máximo: 8 KiB.', [$id],
+            body: self::body('BnccReleaseRequest', ['mathematics' => ['summary' => 'Matemática do 6º ano, após revisar os itens',
+                'value' => ['subject' => 'matematica', 'grade' => 6]]]), errors: [404, 409, 413, 415, 422, 503]);
         $paths['/bncc/documents/{id}/publish']['post'] = self::operation('publishDocument', 'Revisão BNCC', 'Liberar uma revisão aprovada', 'PublishedDocument',
             '**Altera draft para ready.** Exige o perfil oficial, todas as 1304 habilidades e 94 competências aprovadas e origens completas. '
             . 'Sem corpo. Um documento ready não pode mais ser editado. Esta operação não substitui a revisão pedagógica.', [$id], errors: [404, 409, 422, 503]);

@@ -20,7 +20,7 @@ final class ExamBnccValidator
             || $context['grade']['education_stage'] !== 'ensino_fundamental'
             || $context['topics'] !== $request->bnccQuery->topics
             || ($request->bnccQuery->documentId !== null && $document['id'] !== $request->bnccQuery->documentId)
-            || $document['status'] !== 'ready' || $document['structured_at'] === null || $document['ready_at'] === null
+            || !$this->documentIsReleased($document, $request) || $document['structured_at'] === null
             || !is_int($document['page_count']) || $document['page_count'] < 1
             || $context['skills'] === [] || $context['competencies'] === []) {
             $this->invalidContext('context_identity');
@@ -99,6 +99,7 @@ final class ExamBnccValidator
             'document_id' => $context['document']['id'],
             'document_revision' => $context['document']['revision'],
             'document_sha256' => $context['document']['sha256'],
+            ...(isset($context['document']['release']) ? ['curriculum_release' => $context['document']['release']] : []),
             'context_sha256' => hash('sha256', json_encode($context, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
             'questions' => $questions,
             'skills' => $skillReferences,
@@ -107,6 +108,19 @@ final class ExamBnccValidator
             'semantic_review' => 'not_performed',
             'teacher_review_required' => true,
         ];
+    }
+
+    private function documentIsReleased(array $document, ExamGenerationRequest $request): bool
+    {
+        if ($document['status'] === 'ready') {
+            return $document['ready_at'] !== null;
+        }
+        $release = $document['release'] ?? null;
+        return $document['status'] === 'draft' && is_array($release)
+            && is_int($release['id'] ?? null) && $release['id'] > 0
+            && ($release['subject'] ?? null) === $request->bnccQuery->subject
+            && ($release['grade'] ?? null) === $request->bnccQuery->grade
+            && is_string($release['released_at'] ?? null) && trim($release['released_at']) !== '';
     }
 
     private function validateSource(array $source, int $pageCount): void

@@ -9,6 +9,7 @@ import { environment } from "@/lib/environment"
 import type { ExamRequest } from "@/lib/api/types"
 import { ContentStep, HeaderStep, QuestionsStep, type ChangeExamValue } from "./create-exam-fields"
 import { buildCreateExamRequest, initialCreateExamValues, parseTopics, stepFields, validateCreateExam, type CreateExamErrors } from "./create-exam-form"
+import CurriculumAvailability from "@/features/bncc/CurriculumAvailability"
 
 const steps = [
   { label: "Conteúdo", description: "O que avaliar", heading: "O que seus alunos aprenderam?", detail: "Escolha os conteúdos e conte o que foi trabalhado em sala.", Icon: BookOpen },
@@ -109,6 +110,7 @@ export default function CreateExamPage() {
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Seu próximo planejamento</p>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Vamos criar uma prova?</h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Você conhece sua turma. Transforme o que foi ensinado em uma avaliação bem organizada.</p>
+          {!environment.isDemo && <CurriculumAvailability subject={values.subject} grade={Number(values.grade)} />}
         </div>
         <Link to="/provas" className="inline-flex items-center gap-2 text-sm font-semibold text-primary underline-offset-4 hover:underline">
           Minhas provas <ArrowRight className="size-4" aria-hidden="true" />

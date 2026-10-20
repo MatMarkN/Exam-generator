@@ -44,6 +44,7 @@ return static function (App $app, DatabaseConnectionFactory $connections, ?AIPro
     $app->get('/exams/{id:[0-9]+}/answer-key', [$history, 'answers']);
     $documents = new BnccDocumentAction($connections, __DIR__ . '/../storage/bncc');
     $app->post('/bncc/documents', [$documents, 'import']);
+    $app->get('/bncc/documents', [$documents, 'listing']);
     $app->get('/bncc/documents/{id:[0-9]+}', [$documents, 'show']);
     $app->get('/bncc/documents/{id:[0-9]+}/pages', [$documents, 'pages']);
     $app->post('/bncc/documents/{id:[0-9]+}/reprocess', [$documents, 'reprocess']);
@@ -56,4 +57,6 @@ return static function (App $app, DatabaseConnectionFactory $connections, ?AIPro
     $app->patch('/bncc/documents/{id:[0-9]+}/skills/{code:EF[0-9]{2}[A-Z]{2}[0-9]{2}}/review', [$curriculum, 'reviewSkill']);
     $app->patch('/bncc/documents/{id:[0-9]+}/competencies/{competencyId:[0-9]+}/review', [$curriculum, 'reviewCompetency']);
     $app->post('/bncc/documents/{id:[0-9]+}/publish', [$curriculum, 'publish']);
+    $app->get('/bncc/documents/{id:[0-9]+}/releases', [$curriculum, 'releases']);
+    $app->post('/bncc/documents/{id:[0-9]+}/releases', [$curriculum, 'publishScope']);
 };

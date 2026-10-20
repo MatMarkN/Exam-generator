@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { BookOpen, FilePlus2, Files, Leaf, ArrowUpRight, UserRoundCog, FlaskConical, ChevronRight, PanelLeftClose } from "lucide-react"
+import { BookOpen, BookCheck, FilePlus2, Files, Leaf, ArrowUpRight, UserRoundCog, FlaskConical, ChevronRight, PanelLeftClose } from "lucide-react"
 import { NavLink, Outlet, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { environment } from "@/lib/environment"
@@ -8,6 +8,7 @@ const navigation = [
   { to: "/", label: "Criar prova", icon: FilePlus2, end: true },
   { to: "/provas", label: "Minhas provas", icon: Files, end: false },
   { to: "/professores", label: "Professores", icon: UserRoundCog, end: false },
+  { to: "/bncc", label: "BNCC", icon: BookCheck, end: false },
 ]
 
 function Brand() {
@@ -18,10 +19,10 @@ function Brand() {
 }
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
-  return <nav aria-label={mobile ? "Navegação principal móvel" : "Navegação principal"} className={cn(mobile ? "grid grid-cols-3 gap-1 px-3 py-3 lg:hidden" : "space-y-2")}>
+  return <nav aria-label={mobile ? "Navegação principal móvel" : "Navegação principal"} className={cn(mobile ? "grid grid-cols-4 gap-1 px-2 py-3 lg:hidden" : "space-y-2")}>
     {navigation.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => cn(
       "group flex items-center gap-3 rounded-lg px-3.5 py-3 text-sm font-medium transition-colors",
-      mobile && "min-w-0 justify-center gap-1.5 whitespace-nowrap px-1.5 py-2.5 text-xs",
+      mobile && "min-w-0 flex-col justify-center gap-1.5 whitespace-nowrap px-1 py-2 text-[10px] sm:text-xs",
       isActive ? "bg-[#e9f0e9] text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
     )}>
       <Icon className={mobile ? "size-4 shrink-0" : "size-[18px]"} strokeWidth={1.7} aria-hidden="true" /><span>{label}</span>
@@ -31,7 +32,7 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
 
 export default function AppShell() {
   const { pathname } = useLocation()
-  const current = pathname === "/" ? "Criar prova" : pathname === "/professores" ? "Professores" : pathname === "/provas" ? "Minhas provas" : "Visualizar prova"
+  const current = pathname === "/" ? "Criar prova" : pathname === "/bncc" ? "BNCC" : pathname === "/professores" ? "Professores" : pathname === "/provas" ? "Minhas provas" : "Visualizar prova"
   useEffect(() => {
     document.title = current + " — Prova Clara"
     window.scrollTo(0, 0)

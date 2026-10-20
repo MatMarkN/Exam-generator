@@ -63,6 +63,7 @@ final class CurriculumFixture
 
     public function remove(int $documentId): void
     {
+        $this->database->delete('bncc_curriculum_releases', ['document_id' => $documentId]);
         $skills = $this->database->select('bncc_skills', 'id', ['document_id' => $documentId]);
         $this->database->delete('bncc_skill_contexts', ['document_id' => $documentId]);
         if ($skills !== []) {

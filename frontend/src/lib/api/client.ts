@@ -3,6 +3,8 @@ import type {
   Teacher, TeacherCreate, TeacherUpdate, TeacherSettings, TeacherSettingsUpdate,
   Subject, SchoolGrade, Page, ExamRequest, GenerationResult, GenerationSummary,
   GenerationDetail, ExamLookup, AnswerKeyLookup, GenerationStatus,
+  BnccDocumentList, BnccReleaseList, BnccRelease, BnccSkillList,
+  BnccSkillDetail, BnccCompetencyList, BnccReviewRequest,
 } from "./types"
 
 interface ErrorBody { code?: string; message?: string; generation_id?: number }
@@ -60,6 +62,9 @@ export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     const message = ({
       curriculum_not_ready: "A BNCC ainda precisa de revisão e liberação para gerar provas neste ambiente.",
+      scope_not_ready: "A BNCC ainda precisa de revisão e liberação para esta matéria e ano escolar.",
+      review_incomplete: "Confira e aprove todas as habilidades e competências desta matéria e ano antes de liberar.",
+      immutable_document: "Este conteúdo já faz parte de uma liberação. Reprocesse o PDF para criar uma nova revisão antes de alterá-lo.",
       document_not_ready: "A revisão curricular selecionada ainda não está liberada.",
       ai_configuration_missing: "A integração de IA ainda precisa ser configurada no servidor.",
       duplicate_email: "Este e-mail já está cadastrado para outro professor.",
@@ -90,4 +95,17 @@ export const api = {
   generations: (query: { limit?: number; before_id?: number; status?: GenerationStatus; teacher_id?: number } = {}) =>
     request<Page<GenerationSummary>>("/generations" + queryString(query)),
   generation: (id: number) => request<GenerationDetail>("/generations/" + id),
+  bnccDocuments: () => request<BnccDocumentList>("/bncc/documents"),
+  bnccReleases: (documentId: number) => request<BnccReleaseList>("/bncc/documents/" + documentId + "/releases"),
+  publishBnccScope: (documentId: number, body: { subject: string; grade: number }) =>
+    request<BnccRelease & { document_id: number }>("/bncc/documents/" + documentId + "/releases", { method: "POST", body }),
+  bnccSkills: (documentId: number, query: { subject: string; grade: number; offset?: number; limit?: number }) =>
+    request<BnccSkillList>("/bncc/documents/" + documentId + "/skills" + queryString(query)),
+  bnccSkill: (documentId: number, code: string) => request<BnccSkillDetail>("/bncc/documents/" + documentId + "/skills/" + encodeURIComponent(code)),
+  bnccCompetencies: (documentId: number, query: { subject: string; grade: number }) =>
+    request<BnccCompetencyList>("/bncc/documents/" + documentId + "/competencies" + queryString(query)),
+  reviewBnccSkill: (documentId: number, code: string, body: BnccReviewRequest) =>
+    request("/bncc/documents/" + documentId + "/skills/" + encodeURIComponent(code) + "/review", { method: "PATCH", body }),
+  reviewBnccCompetency: (documentId: number, id: number, body: BnccReviewRequest) =>
+    request("/bncc/documents/" + documentId + "/competencies/" + id + "/review", { method: "PATCH", body }),
 }

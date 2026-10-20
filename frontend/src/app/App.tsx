@@ -5,6 +5,7 @@ import CreateExamPage from "@/features/exams/CreateExamPage"
 import ExamPage from "@/features/exams/ExamPage"
 import HistoryPage from "@/features/history/HistoryPage"
 import TeachersPage from "@/features/teachers/TeachersPage"
+import BnccPage from "@/features/bncc/BnccPage"
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
@@ -21,6 +22,7 @@ export default function App() {
     <Route path="provas" element={<HistoryPage />} />
     <Route path="provas/:id" element={<ExamPage />} />
     <Route path="professores" element={<TeachersPage />} />
+    <Route path="bncc" element={<BnccPage />} />
     <Route path="*" element={<NotFoundPage />} />
   </Route></Routes></BrowserRouter></ErrorBoundary>
 }

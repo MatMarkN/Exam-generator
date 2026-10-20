@@ -48,6 +48,14 @@ final class BnccDocumentAction
         return $this->respond($response, fn (): array => $this->publicDocument($this->service()->get($this->positiveInteger($args['id']))));
     }
 
+    public function listing(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        return $this->respond($response, function (): array {
+            $repository = new BnccDocumentRepository($this->connections->create());
+            return ['items' => array_map($this->publicDocument(...), $repository->listing())];
+        });
+    }
+
     public function pages(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         return $this->respond($response, function () use ($request, $args): array {
